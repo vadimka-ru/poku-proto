@@ -1,0 +1,268 @@
+// Team deathmatch. Only the differences from config/balance.json live here: every key left out
+// falls back to the SimConfig default, and those defaults are balance.json, so this is a complete
+// config without repeating the whole of it.
+{
+  "Mode": "Deathmatch",
+
+  "KillsToWin": 30,             // first team there wins...
+  "MatchTicks": 18000,          // ...or the one ahead after 5 minutes; a tie goes to overtime
+  "OvertimeTicks": 3600,        // at most 1 minute; still tied (kills are the score here), it is a draw
+  "RespawnTicks": 180,          // 3 s on the floor
+  "SpawnProtectionTicks": 60,   // 1 s untouchable after coming back
+  "PointsPerPlayerKill": 0,     // nothing to buy in PvP, so kills earn no points
+  "SpawnDistanceTiles": 40,     // walking distance between the two sides at the start
+  "RespawnMinEnemyDistance": 18,// never come back within this many tiles of an enemy
+  "RespawnPointSpacing": 12,    // how thinly the respawn points are spread over the town
+  "OpenAllDoors": true,         // nothing is for sale here, so no door may stay shut
+
+  "BotEngageRange": 7,          // how close a bot comes before it circles
+  "BotAimSpreadPercent": 10,    // used only when BotAimMissTiles is 0
+  "BotAimMissTiles": 0.7,       // a bot's aim is off by up to 0.7 tile sideways, near or far
+  "BotReactionTicks": 18,       // 0.3 s before a bot opens fire on someone who just came into view
+  "BotShotGapTicks": 40,        // at most one charge every 0.67 s, not all three at once
+
+  // Nobody wants to open a match with a pistol against another human.
+  "StartingWeapon": "smg",
+  "StartingPoints": 0,
+
+  // No waves, no horde: a deathmatch never spawns a zombie.
+  "FirstWaveDelayTicks": 2147483647,
+  "MaxZombies": 1,
+
+  // --- Brawlers: the PvP roster. Keep this block identical in pvp.json and pvp-points.json
+  // (ConfigTests.BothVersusFilesShareOneRoster). Ranges are Brawl Stars x1.4 for our wider view.
+  // SpreadPercent = 100 x tan(half the cone). Ticks: 60 per second.
+  // heroes are 24 px wide, almost a tile
+  "PlayerRadius": 0.45,
+  "BrawlerRegenDelayTicks": 180,        // 3 s without damage, then...
+  "BrawlerRegenPercentPerSecond": 13,   // ...13% of max health a second
+  "BushRevealRange": 2,         // in a bush you are hidden from enemies farther than this, in tiles
+  "BushRevealTicks": 60,        // attacking or being hit shows you for 1 s
+  "Brawlers": [
+    { "Id": "mitten", "Name": "Mitten", "Role": "Brawler", "Glow": "#ff8fc0", "Held": "none",
+      "Description": "Cat. Pounces on you claws first.",
+      "MaxHealth": 7400, "SpeedPercent": 108, "Attack": "Dash", "Range": 3, "DashTicks": 10,
+      "Damage": 1500, "ChargeTicks": 60, "SuperHits": 4,
+      "Super": { "Name": "Pounce", "Kind": "Leap", "Range": 5, "LeapTicks": 24, "SplashRadius": 2, "Damage": 2000, "KnockbackTiles": 2 } },
+    { "Id": "pip", "Name": "Pip", "Role": "Marksman", "Glow": "#ffa040", "Held": "slingshot",
+      "Description": "Kid with a slingshot. One stone, a long way.",
+      "MaxHealth": 5000, "SpeedPercent": 100, "Damage": 1380, "SpreadPercent": 2,
+      "BulletSpeed": 34, "Range": 13, "ChargeTicks": 73, "SuperHits": 5,
+      "Super": { "Name": "Skipping Stone", "Kind": "Pierce", "BulletSpeed": 45, "Range": 18, "Damage": 3000 } },
+    { "Id": "bolt", "Name": "Bolt", "Role": "Zapper", "Glow": "#40e8e0", "Held": "none",
+      "Description": "Robot. A spark from the antennae that jumps to the next enemy.",
+      "MaxHealth": 5400, "SpeedPercent": 100, "Attack": "Chain", "Range": 8, "Damage": 1050,
+      "ChainJumps": 1, "ChainJumpRange": 3, "ChainFalloffPercent": 70, "ChargeTicks": 94, "SuperHits": 8,
+      "Super": { "Name": "Overload", "Kind": "Storm", "Range": 9, "SplashRadius": 2.5, "Damage": 1800, "StunTicks": 30 } },
+    { "Id": "grim", "Name": "Grim", "Role": "Reaper", "Glow": "#50e090", "Held": "scythe",
+      "Description": "Reaper. A wide sweep of the scythe.",
+      "MaxHealth": 8000, "SpeedPercent": 100, "Attack": "Arc", "ArcDegrees": 150, "Range": 2.6,
+      "Damage": 1200, "ChargeTicks": 58, "SuperHits": 4,
+      "Super": { "Name": "Harvest", "Kind": "Arc", "ArcDegrees": 360, "Range": 3.5, "Damage": 1600, "SlowPercent": 40, "SlowTicks": 120 } },
+    { "Id": "peach", "Name": "Peach", "Role": "Gunner", "Glow": "#ffc860", "Held": "pistol",
+      "Description": "Girl with a pistol. Quick double taps.",
+      "MaxHealth": 6800, "SpeedPercent": 105, "Damage": 630, "SpreadPercent": 4,
+      "BulletSpeed": 30, "Range": 8, "ChargeTicks": 60, "BurstCount": 2, "BurstIntervalTicks": 4, "SuperHits": 10,
+      "Super": { "Name": "Fan Fire", "Kind": "Bullets", "Pellets": 10, "SpreadPercent": 35, "BulletSpeed": 30, "Range": 7, "Damage": 550 } },
+    { "Id": "zorp", "Name": "Zorp", "Role": "Support", "Glow": "#e080ff", "Held": "none",
+      "Description": "Alien. Lobs psi blobs over walls; the pulse heals the team.",
+      "MaxHealth": 7400, "SpeedPercent": 100, "Attack": "Lob", "Range": 9, "LobTicks": 36,
+      "Damage": 1900, "SplashRadius": 1.8, "ChargeTicks": 78, "SuperHits": 4,
+      "Super": { "Name": "Psi Pulse", "Kind": "HealBurst", "SplashRadius": 5, "HealPercent": 40 } },
+  ],
+
+  // --- Progression tree. Keep identical in pvp.json and pvp-points.json. Each hero plays its home role from level 1:
+  // the trunk is the hero above at levels 1..4, grown by the level formula from level 1 (health by
+  // LevelHealthPercent, damage and healing by LevelDamagePercent per level), plus its "Line": "" entry's level-4
+  // milestone (numbers at the hero's own scale). At 5 the tree forks: the home role goes on, or a second role opens
+  // (Bolt's healer forks again at 8: healer or artillery); at 9 one branch splits into two kinds. A branch
+  // ("Parent" = the branch it grows from, "" = the trunk; "From" = its first level) carries only the differences from
+  // its parent with all the parent's milestones (a Super replaces the whole super). All numbers are at the hero's
+  // level-1 scale and every node grows by the same formula, so a branch at 5 starts from the hero at 4 and a number it
+  // leaves alone is one level up. Health and damage go on a branch only as role modifiers of the parent's:
+  // "MaxHealthPercent" / "DamagePercent" (never lower than 85% health, 85% damage per charge, 70% for a healer —
+  // TreeProgressionTests). The home role at 5 keeps everything the hero had at 4 and adds its role step. Profiles:
+  // tank +30-40% HP, up to -15% damage, slower; assassin +25% damage, faster, -15% HP; healer heals teammates, -10..-20%
+  // damage; sniper range and damage, slower charge; artillery farther and wider.
+  // "Milestones" switch on from level "From" (4 on the trunk, 7 on a branch, 10 = the trick; a milestone "Super"
+  // merges into the current super). A second-role branch may drop what the trunk's milestone gave the home role.
+  "MaxLevel": 10,
+  "LevelHealthPercent": 5,
+  "LevelDamagePercent": 5,
+  "Lines": [
+    { "Hero": "mitten", "Line": "",
+      "Milestones": [
+        { "From": 4, "Charges": 4, "MaxHealth": 8000, "Damage": 1600, "Note": "A 4th charge, health +8%, damage +7%." } ] },
+    { "Hero": "mitten", "Line": "assassin", "Parent": "", "From": 5, "Role": "Assassin",
+      "Description": "A longer, harder pounce.",
+      "SpeedPercent": 112, "Range": 3.5, "DashTicks": 12,
+      "Super": { "Name": "Shadow Pounce", "Kind": "Dash", "Range": 8, "DashTicks": 16, "Damage": 2875 } },
+    { "Hero": "mitten", "Line": "assassin.shadow", "Parent": "assassin", "From": 9, "PathName": "Shadow",
+      "Description": "Strikes from the bushes.",
+      "SpeedPercent": 130,
+      "Milestones": [
+        { "From": 10, "Trick": "Ambush", "TrickPercent": 100, "TrickTicks": 60, "Note": "Trick: Ambush.",
+          "TrickName": "Ambush", "TrickNote": "The first hit after leaving a bush deals double damage." } ] },
+    { "Hero": "mitten", "Line": "assassin.frenzy", "Parent": "assassin", "From": 9, "PathName": "Frenzy",
+      "Description": "Pounce after pounce.",
+      "ChargeTicks": 42, "MaxHealthPercent": 110,
+      "Milestones": [
+        { "From": 10, "Trick": "Frenzy", "Note": "Trick: Frenzy.",
+          "TrickName": "Frenzy", "TrickNote": "A kill refills every charge at once." } ] },
+    { "Hero": "mitten", "Line": "tank", "Parent": "", "From": 5, "Role": "Tank",
+      "Description": "Short pounces, hard to put down.",
+      "MaxHealthPercent": 140, "DamagePercent": 95, "SpeedPercent": 106, "Range": 2.5, "DashTicks": 8,
+      "KnockbackTiles": 1,
+      "Super": { "Name": "Bulldoze", "Kind": "Dash", "Range": 5, "DashTicks": 20, "Damage": 1725, "KnockbackTiles": 3 },
+      "Milestones": [
+        { "From": 7, "Super": { "StunTicks": 30 }, "Note": "The super also stuns." },
+        { "From": 10, "Trick": "DashArmour", "TrickPercent": 30, "Note": "Trick: Dash Armour.",
+          "TrickName": "Dash Armour", "TrickNote": "Takes 30% less damage while dashing." } ] },
+    { "Hero": "pip", "Line": "",
+      "Milestones": [
+        { "From": 4, "Range": 15, "BulletSpeed": 40, "Note": "Range +2 and a faster stone." } ] },
+    { "Hero": "pip", "Line": "sniper", "Parent": "", "From": 5, "Role": "Sniper",
+      "Description": "A farther, heavier stone.",
+      "MaxHealthPercent": 105, "DamagePercent": 110, "Range": 20, "BulletSpeed": 44,
+      "Super": { "Name": "Skipping Stone+", "Kind": "Pierce", "BulletSpeed": 48, "Range": 24, "Damage": 3450 } },
+    { "Hero": "pip", "Line": "sniper.pierce", "Parent": "sniper", "From": 9, "PathName": "Pierce",
+      "Description": "One heavy stone through the whole line.",
+      "DamagePercent": 115,
+      "Milestones": [
+        { "From": 10, "Trick": "PierceThrough", "DamagePercent": 87, "Note": "Trick: Pierce Through; damage back to +0%.",
+          "TrickName": "Pierce Through", "TrickNote": "The stone flies through every enemy in its path." } ] },
+    { "Hero": "pip", "Line": "sniper.rapid", "Parent": "sniper", "From": 9, "PathName": "Rapid",
+      "Description": "More stones, faster.",
+      "Charges": 4, "ChargeTicks": 70,
+      "Milestones": [
+        { "From": 10, "Trick": "Ricochet", "TrickPercent": 40, "TrickRadius": 5, "Note": "Trick: Ricochet.",
+          "TrickName": "Ricochet", "TrickNote": "After a hit the stone bounces to the nearest other enemy." } ] },
+    { "Hero": "pip", "Line": "healer", "Parent": "", "From": 5, "Role": "Healer",
+      "Description": "A stone that heals the teammate it hits.",
+      "MaxHealthPercent": 140, "DamagePercent": 90, "HealAmount": 4630, "Range": 13, "BulletSpeed": 34,
+      "Super": { "Name": "Care Pulse", "Kind": "HealBurst", "SplashRadius": 5, "HealPercent": 40 },
+      "Milestones": [
+        { "From": 7, "Charges": 4, "Note": "A 4th charge." },
+        { "From": 10, "Trick": "Rescuer", "TrickPercent": 100, "TrickThresholdPercent": 30, "Note": "Trick: Rescuer.",
+          "TrickName": "Rescuer", "TrickNote": "Heals teammates below 30% health twice as much." } ] },
+    { "Hero": "bolt", "Line": "",
+      "Milestones": [
+        { "From": 4, "SlowPercent": 30, "SlowTicks": 60, "Note": "The spark slows enemies by 30%." } ] },
+    { "Hero": "bolt", "Line": "tank", "Parent": "", "From": 5, "Role": "Tank",
+      "Description": "A spark that jumps more, on a sturdy frame.",
+      "MaxHealthPercent": 140, "ChainJumps": 2,
+      "Super": { "Name": "Quake", "Kind": "Arc", "ArcDegrees": 360, "Range": 4, "Damage": 1725, "StunTicks": 60 },
+      "Milestones": [
+        { "From": 7, "ChainJumps": 3, "MaxHealthPercent": 105, "Note": "+1 jump, health +5%." },
+        { "From": 10, "Trick": "Static", "TrickPercent": 15, "TrickTicks": 30, "TrickRadius": 2.5, "Note": "Trick: Static.",
+          "TrickName": "Static", "TrickNote": "Enemies close to Bolt keep taking shock damage." } ] },
+    { "Hero": "bolt", "Line": "healer", "Parent": "", "From": 5, "Role": "Healer",
+      "Description": "The spark jumps to teammates too and heals them.",
+      "MaxHealthPercent": 120, "DamagePercent": 80, "HealAmount": 2205, "ChainJumps": 3, "SlowPercent": 0, "SlowTicks": 0,
+      "Super": { "Name": "Recharge", "Kind": "HealBurst", "SplashRadius": 5, "HealPercent": 40 },
+      "Milestones": [
+        { "From": 7, "HealAmount": 2535, "Note": "Healing +15%." } ] },
+    { "Hero": "bolt", "Line": "healer.late", "Parent": "healer", "From": 8,
+      "Milestones": [
+        { "From": 10, "Trick": "Recharge", "Note": "Trick: Recharge.",
+          "TrickName": "Recharge", "TrickNote": "A healed teammate gets one attack charge back." } ] },
+    { "Hero": "bolt", "Line": "artillery", "Parent": "healer", "From": 8, "Role": "Artillery",
+      "Description": "A longer spark that hits more enemies harder.",
+      "MaxHealthPercent": 85, "DamagePercent": 112, "HealAmount": 0, "Range": 10, "ChainJumps": 2, "ChainJumpRange": 4,
+      "Super": { "Name": "Overload+", "Kind": "Storm", "Range": 10, "SplashRadius": 3, "Damage": 1725, "StunTicks": 45 } },
+    { "Hero": "bolt", "Line": "artillery.storm", "Parent": "artillery", "From": 9, "PathName": "Storm",
+      "Description": "A long chain across the whole crowd.",
+      "ChainJumps": 4, "DamagePercent": 116,
+      "Milestones": [
+        { "From": 10, "Trick": "Thunder", "TrickPercent": 40, "TrickRadius": 1.5, "Note": "Trick: Thunder.",
+          "TrickName": "Thunder", "TrickNote": "Every link of the chain also hits enemies around its target." } ] },
+    { "Hero": "bolt", "Line": "artillery.overload", "Parent": "artillery", "From": 9, "PathName": "Overload",
+      "Description": "One target, burned down.",
+      "ChainJumps": 0, "DamagePercent": 160,
+      "Milestones": [
+        { "From": 10, "Trick": "Overheat", "TrickPercent": 60, "Note": "Trick: Overheat.",
+          "TrickName": "Overheat", "TrickNote": "Every third hit in a row on the same target deals 60% more damage." } ] },
+    { "Hero": "grim", "Line": "",
+      "Milestones": [
+        { "From": 4, "SlowPercent": 20, "SlowTicks": 60, "MaxHealth": 8800, "Damage": 1260, "Note": "The scythe slows enemies by 20%, health +10%, damage +5%." } ] },
+    { "Hero": "grim", "Line": "tank", "Parent": "", "From": 5, "Role": "Tank",
+      "Description": "A full-circle sweep, hard to put down.",
+      "MaxHealthPercent": 130, "ArcDegrees": 360,
+      "Super": { "Name": "Harvest+", "Kind": "Arc", "ArcDegrees": 360, "Range": 4.5, "Damage": 1535, "SlowPercent": 40, "SlowTicks": 120, "KnockbackTiles": 2 } },
+    { "Hero": "grim", "Line": "tank.warden", "Parent": "tank", "From": 9, "PathName": "Warden",
+      "Description": "Holds enemies where he wants them.",
+      "SlowPercent": 40, "MaxHealthPercent": 102,
+      "Super": { "Name": "Harvest+", "Kind": "Arc", "ArcDegrees": 360, "Range": 4.5, "Damage": 1535, "SlowPercent": 40, "SlowTicks": 120, "KnockbackTiles": 2, "StunTicks": 30 },
+      "Milestones": [
+        { "From": 10, "Trick": "Grip", "TrickRadius": 1.5, "Note": "Trick: Grip.",
+          "TrickName": "Grip", "TrickNote": "The scythe pulls enemies towards Grim." } ] },
+    { "Hero": "grim", "Line": "tank.reaper", "Parent": "tank", "From": 9, "PathName": "Reaper",
+      "Description": "Feeds on every cut.",
+      "DamagePercent": 105,
+      "Milestones": [
+        { "From": 10, "Trick": "Harvest", "TrickPercent": 25, "Note": "Trick: Harvest.",
+          "TrickName": "Harvest", "TrickNote": "Heals for a quarter of the damage he deals." } ] },
+    { "Hero": "grim", "Line": "assassin", "Parent": "", "From": 5, "Role": "Assassin",
+      "Description": "A narrow, deadly cut, and quick on his feet.",
+      "MaxHealthPercent": 100, "DamagePercent": 125, "SpeedPercent": 115, "ArcDegrees": 90, "Range": 2.9, "SlowPercent": 0, "SlowTicks": 0,
+      "Super": { "Name": "Reap", "Kind": "Leap", "Range": 5, "LeapTicks": 24, "SplashRadius": 2.5, "Damage": 2110, "KnockbackTiles": 2.5 },
+      "Milestones": [
+        { "From": 7, "Charges": 4, "Note": "A 4th charge." },
+        { "From": 10, "Trick": "Execute", "TrickPercent": 90, "TrickThresholdPercent": 40, "Note": "Trick: Execute.",
+          "TrickName": "Execute", "TrickNote": "90% more damage to enemies below 40% health." } ] },
+    { "Hero": "peach", "Line": "",
+      "Milestones": [
+        { "From": 4, "BurstCount": 3, "Damage": 570, "Note": "Bursts of 3, each bullet a little lighter." } ] },
+    { "Hero": "peach", "Line": "assassin", "Parent": "", "From": 5, "Role": "Assassin",
+      "Description": "Quadruple taps, quick on her feet.",
+      "DamagePercent": 85, "SpeedPercent": 115, "BurstCount": 4,
+      "Super": { "Name": "Barrage", "Kind": "Bullets", "Pellets": 12, "SpreadPercent": 30, "BulletSpeed": 30, "Range": 6, "Damage": 480, "SlowPercent": 30, "SlowTicks": 90 },
+      "Milestones": [
+        { "From": 7, "ChargeTicks": 48, "MaxHealthPercent": 107, "Note": "Charges reload 20% faster, health +7%." },
+        { "From": 10, "Trick": "Flurry", "TrickPercent": 100, "TrickTicks": 180, "Note": "Trick: Flurry.",
+          "TrickName": "Flurry", "TrickNote": "For 3 s after a kill, charges reload twice as fast." } ] },
+    { "Hero": "peach", "Line": "sniper", "Parent": "", "From": 5, "Role": "Sniper",
+      "Description": "Double taps from far away, fast bullets.",
+      "DamagePercent": 140, "Range": 12.5, "BurstCount": 2, "SpreadPercent": 2, "BulletSpeed": 38, "ChargeTicks": 75,
+      "Super": { "Name": "Longshot", "Kind": "Bullets", "Pellets": 5, "SpreadPercent": 6, "BulletSpeed": 40, "Range": 16, "Damage": 765 } },
+    { "Hero": "peach", "Line": "sniper.precision", "Parent": "sniper", "From": 9, "PathName": "Precision",
+      "Description": "One shot, well placed.",
+      "BurstCount": 1, "DamagePercent": 240,
+      "Milestones": [
+        { "From": 10, "Trick": "Longshot", "TrickPercent": 25, "TrickThresholdPercent": 67, "Note": "Trick: Longshot.",
+          "TrickName": "Longshot", "TrickNote": "Hits in the far third of her range deal 25% more damage." } ] },
+    { "Hero": "peach", "Line": "sniper.suppress", "Parent": "sniper", "From": 9, "PathName": "Suppress",
+      "Description": "Keeps enemies pinned down.",
+      "SlowPercent": 10, "SlowTicks": 60,
+      "Milestones": [
+        { "From": 10, "Trick": "Pin", "TrickTicks": 60, "Note": "Trick: Pin.",
+          "TrickName": "Pin", "TrickNote": "An enemy she hits cannot use its super for 1 s." } ] },
+    { "Hero": "zorp", "Line": "",
+      "Milestones": [
+        { "From": 4, "SplashRadius": 2.0, "Note": "A wider blast." } ] },
+    { "Hero": "zorp", "Line": "artillery", "Parent": "", "From": 5, "Role": "Artillery",
+      "Description": "A wider blob, lobbed farther.",
+      "Range": 10, "SplashRadius": 2.3,
+      "Super": { "Name": "Big Blob", "Kind": "Lob", "Range": 11, "LobTicks": 36, "SplashRadius": 2.5, "Damage": 3065, "SlowPercent": 40, "SlowTicks": 120 } },
+    { "Hero": "zorp", "Line": "artillery.mortar", "Parent": "artillery", "From": 9, "PathName": "Mortar",
+      "Description": "Big, slow, heavy shells.",
+      "SplashRadius": 2.6, "DamagePercent": 120, "LobTicks": 44,
+      "Milestones": [
+        { "From": 10, "Trick": "DirectHit", "TrickPercent": 70, "TrickRadius": 0.8, "Note": "Trick: Direct Hit.",
+          "TrickName": "Direct Hit", "TrickNote": "Enemies in the middle of the blast take 70% more damage." } ] },
+    { "Hero": "zorp", "Line": "artillery.cluster", "Parent": "artillery", "From": 9, "PathName": "Cluster",
+      "Description": "Blobs that split apart.",
+      "Charges": 4, "ChargeTicks": 62,
+      "Milestones": [
+        { "From": 10, "Trick": "Cluster", "TrickPercent": 60, "TrickRadius": 1.5, "Note": "Trick: Cluster.",
+          "TrickName": "Cluster", "TrickNote": "The blob splits into three small blasts around where it lands." } ] },
+    { "Hero": "zorp", "Line": "healer", "Parent": "", "From": 5, "Role": "Healer",
+      "Description": "The blob heals teammates where it lands and hurts enemies.",
+      "MaxHealthPercent": 110, "DamagePercent": 80, "HealAmount": 3085, "SplashRadius": 2.0,
+      "Super": { "Name": "Psi Pulse", "Kind": "HealBurst", "SplashRadius": 5, "HealPercent": 40 },
+      "Milestones": [
+        { "From": 7, "HealAmount": 3240, "Note": "Healing +5%." },
+        { "From": 10, "Trick": "PsiShield", "TrickPercent": 10, "TrickTicks": 120, "Note": "Trick: Psi Shield.",
+          "TrickName": "Psi Shield", "TrickNote": "Healed teammates take 10% less damage for 2 s." } ] },
+  ],
+}

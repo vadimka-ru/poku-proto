@@ -1,0 +1,66 @@
+{
+ "_header": [
+  "pvp config/pvp.json match 0, 3600 ticks, 24554b170228",
+  "pvp-points config/pvp-points.json match 0, 3600 ticks, 24554b170228"
+ ],
+ "pvp/forest": {
+  "result": "tick 3600 hash 8e3dbc75791aa033 chain 480e4ac529c88f0d score 11-9 gameOver False winner -1",
+  "inputs": "config fcc13214 map 9fabbbf8 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 19572
+ },
+ "pvp/city": {
+  "result": "tick 3600 hash fb4b1d36d59fe5ac chain edd5dcaaceca9cd0 score 8-14 gameOver False winner -1",
+  "inputs": "config fcc13214 map 9000865f seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 20251
+ },
+ "pvp/lava": {
+  "result": "tick 3600 hash 1a1e9c6ad01358a0 chain fcd932f025f1b7d7 score 11-10 gameOver False winner -1",
+  "inputs": "config fcc13214 map 330c0010 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 31798
+ },
+ "pvp/planet": {
+  "result": "tick 3600 hash ece5ea7448128e2e chain 9e35f2262af27b71 score 7-16 gameOver False winner -1",
+  "inputs": "config fcc13214 map dc760f95 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 25133
+ },
+ "pvp/pole": {
+  "result": "tick 3600 hash 957f658ecc93476d chain 469ccf9bc123eb57 score 8-13 gameOver False winner -1",
+  "inputs": "config fcc13214 map eab2d2ba seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 38795
+ },
+ "pvp/ship": {
+  "result": "tick 3600 hash 606a1e167dc605d4 chain ff59f0c057f0b031 score 10-9 gameOver False winner -1",
+  "inputs": "config fcc13214 map 49d0aa04 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 56093
+ },
+ "pvp-points/forest": {
+  "result": "tick 3600 hash 4d307d1498519306 chain e56a7a9a0564b11a score 640-560 gameOver False winner -1",
+  "inputs": "config 8e792e68 map 9fabbbf8 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 24732
+ },
+ "pvp-points/city": {
+  "result": "tick 3600 hash 84bc701835118036 chain 5f6b3246590f3c0f score 590-470 gameOver False winner -1",
+  "inputs": "config 8e792e68 map 9000865f seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 26143
+ },
+ "pvp-points/lava": {
+  "result": "tick 3600 hash 7ab1d4cf6dc101a4 chain 5d39361b3c26416c score 480-580 gameOver False winner -1",
+  "inputs": "config 8e792e68 map 330c0010 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 44617
+ },
+ "pvp-points/planet": {
+  "result": "tick 3600 hash 267827db765a24b1 chain ba5139c06e4fd3e8 score 660-520 gameOver False winner -1",
+  "inputs": "config 8e792e68 map dc760f95 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 30755
+ },
+ "pvp-points/pole": {
+  "result": "tick 3600 hash 46257a1d6175aa54 chain a22a5f72e13885f9 score 320-610 gameOver False winner -1",
+  "inputs": "config 8e792e68 map eab2d2ba seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 50846
+ },
+ "pvp-points/ship": {
+  "result": "tick 3600 hash b8077d7aeddc7139 chain 764961ba12985f3f score 700-410 gameOver False winner -1",
+  "inputs": "config 8e792e68 map 49d0aa04 seed 7000 picks [3,2,4,1,5,3]",
+  "nativeTicksPerSecond": 72802
+ }
+}

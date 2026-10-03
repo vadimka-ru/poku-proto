@@ -1,1 +1,45 @@
-<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Poku prototype</title><body style="background:#111;color:#eee;font:20px sans-serif;padding:24px">Poku prototype: coming soon.</body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poku Telegram prototype</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="common.css">
+<script src="common.js"></script>
+<script>
+  // A room link (t.me/poku_game_bot?startapp=CODE) opens this page: go straight to the WebRTC test.
+  (function () {
+    var sp = Poku.inTelegram && Poku.tg.initDataUnsafe && Poku.tg.initDataUnsafe.start_param;
+    if (sp) location.replace('rtc/?join=' + encodeURIComponent(sp));
+  })();
+</script>
+</head>
+<body>
+<h1>Poku in Telegram: feasibility tests</h1>
+<div class="card"><div id="tg" class="big"></div></div>
+<a class="card" style="display:block;text-decoration:none;color:inherit" href="sim/">
+  <div class="mid">1. Simulation in WebAssembly →</div>
+  <div class="dim">The game's real C# simulation in the browser: 3v3 bot match, ticks per second, hash equal to the Mac's.</div></a>
+<a class="card" style="display:block;text-decoration:none;color:inherit" href="sim/?v=interp">
+  <div class="mid">1b. Same, interpreter build →</div>
+  <div class="dim">Smaller download, much slower. For comparison.</div></a>
+<a class="card" style="display:block;text-decoration:none;color:inherit" href="rtc/">
+  <div class="mid">2. Phone ↔ phone over WebRTC →</div>
+  <div class="dim">Needs two phones: one creates a room, the other joins. Connection, path, ping, loss.</div></a>
+<a class="card" style="display:block;text-decoration:none;color:inherit" href="godot/">
+  <div class="mid">3. Godot web export →</div>
+  <div class="dim">Download size, load time, FPS with our heroes, touch and joystick. Tap STRESS for the sprite limit.</div></a>
+<h2>This device</h2>
+<div class="card"><table id="info"></table></div>
+<div class="dim">Build <span id="build"></span></div>
+<script>
+  document.getElementById('tg').innerHTML = Poku.inTelegram
+    ? '<span class="ok">Inside Telegram: ' + Poku.tg.platform + '</span>'
+    : '<span class="warn">Plain browser (not Telegram)</span>';
+  var t = document.getElementById('info');
+  Poku.deviceInfo().forEach(function (r) { var row = t.insertRow(); row.insertCell().textContent = r[0]; row.insertCell().textContent = r[1]; });
+  document.getElementById('build').textContent = document.lastModified;
+</script>
+</body>
+</html>

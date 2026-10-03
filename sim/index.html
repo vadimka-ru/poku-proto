@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poku sim in WASM</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="../common.css">
+<script src="../common.js"></script>
+</head>
+<body>
+<h1>1. Simulation in WebAssembly</h1>
+<div class="card">
+  <div id="status" class="big">Loading…</div>
+  <div id="verdict" class="mid"></div>
+</div>
+<div class="card">
+  <div>Build:
+    <a class="btn" id="v-aot" href="?v=aot">AOT</a>
+    <a class="btn secondary" id="v-interp" href="?v=interp">Interpreter</a>
+  </div>
+  <div style="margin-top:8px">
+    <select id="config"><option value="pvp">deathmatch (pvp.json)</option><option value="pvp-points">capture (pvp-points.json)</option></select>
+    <select id="maps"><option value="forest city">forest + city</option><option value="forest city lava planet pole ship">all 6 maps</option></select>
+  </div>
+  <button id="run" disabled>Run again</button>
+  <div class="dim">3v3 bots, 60 s of game time (3600 ticks) per map, as fast as possible. Realtime needs 60 ticks/s.</div>
+</div>
+<div class="card"><table id="results"><tr><th>map</th><th>ticks/s</th><th>× realtime</th><th>ms/tick</th><th>worst chunk ms/tick</th><th>hash = native?</th></tr></table></div>
+<div class="card" id="load"></div>
+<div class="card mono" id="detail"></div>
+<script type="module">
+const variant = new URLSearchParams(location.search).get('v') === 'interp' ? 'interp' : 'aot';
+document.getElementById('v-' + variant).className = 'btn';
+document.getElementById('v-' + (variant === 'aot' ? 'interp' : 'aot')).className = 'btn secondary';
+const $ = id => document.getElementById(id);
+const status = (t, cls = '') => { $('status').textContent = t; $('status').className = 'big ' + cls; };
+const detail = [];
+const log = t => { detail.push(t); $('detail').textContent = detail.join('\n'); };
+const sleep = () => new Promise(r => setTimeout(r, 0));
+
+let exports, runtime, expected;
+const tLoad0 = performance.now();
+try {
+  const { dotnet } = await import(`./${variant}/_framework/dotnet.js`);
+  runtime = await dotnet.withDiagnosticTracing(false).create();
+  const cfg = runtime.getConfig();
+  exports = (await runtime.getAssemblyExports(cfg.mainAssemblyName)).Bench;
+  expected = await (await fetch('data/expected.json', { cache: 'no-cache' })).json();
+} catch (e) {
+  status('Failed to start .NET: ' + e, 'bad');
+  throw e;
+}
+const tReady = performance.now();
+showLoad();
+
+function wasmHeapBytes() {
+  try { return runtime.Module.HEAPU8.byteLength; } catch (e) { return 0; }
+}
+
+function showLoad() {
+  let transfer = 0, encoded = 0, decoded = 0;
+  const files = [];
+  for (const r of performance.getEntriesByType('resource')) {
+    if (!r.name.includes('/_framework/')) continue;
+    transfer += r.transferSize || 0; encoded += r.encodedBodySize || 0; decoded += r.decodedBodySize || 0;
+    files.push(`${r.name.split('/').pop()} ${(r.encodedBodySize / 1024).toFixed(0)}K`);
+  }
+  $('load').innerHTML =
+    `<div class="mid">${variant.toUpperCase()}: download ${Poku.mb(encoded)} (${Poku.mb(decoded)} unpacked), ` +
+    `${transfer ? Poku.mb(transfer) + ' over network' : 'from cache'}</div>` +
+    `<div class="mid">Load: page start → .NET ready ${(tReady / 1000).toFixed(2)} s (runtime start ${((tReady - tLoad0) / 1000).toFixed(2)} s)</div>` +
+    `<div id="mem" class="mid"></div><div class="dim mono">${files.join(', ')}</div>`;
+  showMem();
+}
+
+function showMem() {
+  const js = performance.memory ? Poku.mb(performance.memory.usedJSHeapSize) : 'n/a';
+  $('mem').textContent = `Memory: wasm heap ${Poku.mb(wasmHeapBytes())}, .NET managed ${exports.ManagedMegabytes().toFixed(1)} MB, JS heap ${js}`;
+}
+
+async function run() {
+  $('run').disabled = true;
+  const config = $('config').value, maps = $('maps').value.split(' ');
+  const configText = await (await fetch(`data/${config}.json`)).text();
+  log(`sim fingerprint ${exports.Fingerprint()}, ${variant}, ${config}, ${navigator.userAgent}`);
+  let allMatch = true, slowest = Infinity;
+  for (const map of maps) {
+    const mapText = await (await fetch(`data/${map}.txt`)).text();
+    status(`Running ${map}…`);
+    await sleep();
+    const inputs = exports.Start(configText, mapText, 0);
+    const chunk = 300;
+    let ticks = 0, ms = 0, worst = 0;
+    while (ticks < 3600) {
+      const t0 = performance.now();
+      const ran = exports.Step(Math.min(chunk, 3600 - ticks));
+      const dt = performance.now() - t0;
+      ms += dt; ticks += ran;
+      if (ran > 0) worst = Math.max(worst, dt / ran);
+      status(`Running ${map}: ${ticks}/3600 ticks, ${(ticks / ms * 1000).toFixed(0)} ticks/s`);
+      await sleep();
+      if (ran < chunk && ticks < 3600) break; // match ended early
+    }
+    const result = exports.Result();
+    const ref = expected[`${config}/${map}`];
+    const same = ref && ref.result === result && ref.inputs === inputs;
+    allMatch = allMatch && same;
+    const tps = ticks / ms * 1000;
+    slowest = Math.min(slowest, tps);
+    const row = $('results').insertRow();
+    row.innerHTML = `<td>${map}</td><td class="mid">${tps.toFixed(0)}</td><td>${(tps / 60).toFixed(0)}×</td>` +
+      `<td>${(ms / ticks).toFixed(3)}</td><td>${worst.toFixed(3)}</td>` +
+      `<td class="${same ? 'ok' : 'bad'} mid">${same ? 'YES' : 'NO'}</td>`;
+    log(`${map}: ${result}\n  inputs ${inputs}\n  native ${ref ? ref.result + ' (' + ref.nativeTicksPerSecond + ' ticks/s native on the build Mac, M-series, warm JIT)' : 'none'}`);
+    showMem();
+  }
+  status(`Slowest map: ${slowest.toFixed(0)} ticks/s = ${(slowest / 60).toFixed(0)}× realtime`, slowest >= 60 ? 'ok' : 'bad');
+  $('verdict').innerHTML = allMatch
+    ? '<span class="ok">Hashes match native .NET: deterministic ✓</span>'
+    : '<span class="bad">HASH MISMATCH with native: NOT deterministic ✗</span>';
+  $('verdict').innerHTML += `<br><span class="dim">A real match needs 60 ticks/s, i.e. one tick under ${(1000 / 60).toFixed(1)} ms including rendering.</span>`;
+  Poku.haptic(allMatch ? 'success' : 'error');
+  window.simDone = { slowest, allMatch, variant };
+  Poku.report(document.body.innerText);
+  $('run').disabled = false;
+}
+const qp = new URLSearchParams(location.search);
+if (qp.get('config')) $('config').value = qp.get('config');
+if (qp.get('maps') === 'all') $('maps').selectedIndex = 1;
+$('run').onclick = () => { $('results').querySelectorAll('tr:not(:first-child)').forEach(r => r.remove()); detail.length = 0; run(); };
+run();
+</script>
+</body>
+</html>

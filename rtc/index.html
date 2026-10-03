@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poku WebRTC test</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<link rel="stylesheet" href="../common.css">
+<script src="../common.js"></script>
+</head>
+<body>
+<h1>2. Phone ↔ phone over WebRTC</h1>
+<div class="card">
+  <div id="state" class="big">Not connected</div>
+  <div id="sub" class="mid dim"></div>
+</div>
+<div class="card" id="start">
+  <button id="create">Create room</button>
+  <div style="margin:10px 0">or join: <input id="code" size="6" maxlength="6" autocapitalize="characters" placeholder="CODE"> <button id="join" class="secondary">Join</button></div>
+  <div class="dim">Signalling: public PeerJS server (0.peerjs.com). ICE: Google public STUN only, no TURN relay, so two phones
+    on mobile data / behind strict NAT may fail to connect: that is part of what this measures.</div>
+</div>
+<div class="card" id="share" style="display:none">
+  <div class="dim">Room code</div>
+  <div id="roomcode" class="big" style="font-size:56px;letter-spacing:6px"></div>
+  <div class="mono" id="links"></div>
+  <button id="tgshare" class="secondary" style="display:none">Send link in Telegram</button>
+  <button id="copy" class="secondary">Copy link</button>
+</div>
+<div class="card" id="results" style="display:none">
+  <div id="ice" class="mid"></div>
+  <div id="rtt" class="big"></div>
+  <div id="stream" class="mid"></div>
+  <div id="peerstats" class="mid dim"></div>
+</div>
+<div class="card mono" id="log"></div>
+<script>
+const $ = id => document.getElementById(id);
+const PREFIX = 'poku-proto-rtc-';
+const TEST_SECONDS = 30, RATE = 60;
+const ICE = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] };
+const qp = new URLSearchParams(location.search);
+const logLines = [];
+function log(t) { logLines.push(((performance.now() / 1000).toFixed(1)) + 's ' + t); $('log').textContent = logLines.slice(-40).join('\n'); }
+function state(t, cls = '') { $('state').textContent = t; $('state').className = 'big ' + cls; if (cls === 'bad') setTimeout(reportOut, 1500); }
+function sub(t) { $('sub').textContent = t; }
+
+let peer, conn, connectTimer, testDone = false;
+const rx = { first: -1, max: -1, count: 0, ooo: 0, lastArrive: 0, lastSent: 0, jitter: 0, jitterN: 0, maxGap: 0 };
+const rtts = [];
+let summaryFromPeer = null, selected = '';
+
+function newCode() {
+  const a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let c = ''; for (let i = 0; i < 5; i++) c += a[Math.floor(Math.random() * a.length)];
+  return c;
+}
+
+function makePeer(id) {
+  const p = id ? new Peer(id, { config: ICE, debug: 1 }) : new Peer({ config: ICE, debug: 1 });
+  p.on('error', e => {
+    log('peer error: ' + e.type + ' ' + (e.message || ''));
+    if (e.type === 'peer-unavailable') { state('FAILED: no such room', 'bad'); sub('Check the code; the host must keep the page open.'); }
+    else if (e.type === 'unavailable-id') { state('Code taken, creating another…', 'warn'); setTimeout(create, 300); }
+    else if (!conn || !conn.open) { state('FAILED: ' + e.type, 'bad'); Poku.haptic('error'); }
+  });
+  p.on('disconnected', () => log('signalling server disconnected (the data channel may still be fine)'));
+  return p;
+}
+
+function create(code) {
+  code = code || newCode();
+  $('start').style.display = 'none';
+  state('Opening room…');
+  peer = makePeer(PREFIX + code);
+  peer.on('open', () => {
+    state('Waiting for the other phone', 'warn');
+    sub('Open this page on the second phone and enter the code.');
+    $('share').style.display = '';
+    $('roomcode').textContent = code;
+    const url = location.origin + location.pathname + '?join=' + code;
+    const tgLink = 'https://t.me/poku_game_bot?startapp=' + code;
+    $('links').textContent = 'Browser: ' + url + '\nTelegram (main Mini App of @poku_game_bot): ' + tgLink;
+    $('copy').onclick = () => navigator.clipboard && navigator.clipboard.writeText(Poku.inTelegram ? tgLink : url).then(() => log('link copied'));
+    if (Poku.inTelegram) {
+      $('tgshare').style.display = '';
+      $('tgshare').onclick = () => Poku.tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(tgLink) + '&text=' + encodeURIComponent('Poku WebRTC test, room ' + code));
+    }
+    log('room ' + code + ' open on the signalling server');
+    Poku.report && qp.get('report') && fetch('/report/' + qp.get('report') + '-open', { method: 'POST', body: code });
+  });
+  peer.on('connection', c => {
+    if (conn) { c.close(); return; }
+    log('incoming connection from ' + c.peer);
+    attach(c);
+  });
+}
+
+function join(code) {
+  code = (code || '').trim().toUpperCase();
+  if (!code) return;
+  $('start').style.display = 'none';
+  state('Joining ' + code + '…');
+  peer = makePeer();
+  peer.on('open', () => {
+    log('signalling ok, connecting to ' + code);
+    attach(peer.connect(PREFIX + code, { reliable: false, serialization: 'json' }));
+  });
+}
+
+function attach(c) {
+  conn = c;
+  state('Connecting (ICE)…', 'warn');
+  connectTimer = setTimeout(() => { if (!conn.open) { state('FAILED: no route in 25 s', 'bad'); sub('ICE could not find a path. Without a TURN relay this is expected on some mobile networks / NATs.'); Poku.haptic('error'); showIce(); } }, 25000);
+  const watchIce = () => {
+    const pc = conn.peerConnection;
+    if (!pc) return setTimeout(watchIce, 100);
+    pc.addEventListener('iceconnectionstatechange', () => {
+      log('ICE ' + pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') { state('FAILED: ICE failed', 'bad'); sub('No direct path between the two devices (no TURN relay configured).'); showIce(); Poku.haptic('error'); }
+    });
+  };
+  watchIce();
+  conn.on('open', () => {
+    clearTimeout(connectTimer);
+    state('CONNECTED', 'ok');
+    sub('Testing for ' + TEST_SECONDS + ' s: ' + RATE + ' input messages per second each way + pings');
+    Poku.haptic('success');
+    $('share').style.display = 'none';
+    $('results').style.display = '';
+    log('data channel open');
+    setTimeout(showIce, 500);
+    runTest();
+  });
+  conn.on('data', onData);
+  conn.on('close', () => { log('connection closed'); if (!testDone) state('DISCONNECTED', 'bad'); });
+  conn.on('error', e => log('conn error ' + e));
+}
+
+function onData(m) {
+  const now = performance.now();
+  if (m.t === 'in') {
+    if (rx.first < 0) rx.first = m.s;
+    if (m.s < rx.max) rx.ooo++;
+    if (rx.count > 0 && m.s === rx.max + 1) {
+      // RFC 3550-style interarrival jitter on consecutive messages.
+      const d = Math.abs((now - rx.lastArrive) - (m.ts - rx.lastSent));
+      rx.jitter += d; rx.jitterN++;
+      rx.maxGap = Math.max(rx.maxGap, now - rx.lastArrive);
+    }
+    if (m.s > rx.max) { rx.max = m.s; rx.lastArrive = now; rx.lastSent = m.ts; }
+    rx.count++;
+  } else if (m.t === 'ping') {
+    conn.send({ t: 'pong', id: m.id, ts: m.ts });
+  } else if (m.t === 'pong') {
+    rtts.push(now - m.ts);
+  } else if (m.t === 'end') {
+    rx.peerSent = m.sent;
+  } else if (m.t === 'sum') {
+    summaryFromPeer = m;
+  }
+}
+
+function runTest() {
+  let seq = 0, pingId = 0;
+  const t0 = performance.now();
+  // Inputs are sent on a fixed 60 Hz schedule (catching up after timer hiccups), like lockstep would.
+  const inputTimer = setInterval(() => {
+    const due = Math.floor((performance.now() - t0) / (1000 / RATE));
+    while (seq <= due && seq < TEST_SECONDS * RATE) conn.send({ t: 'in', s: seq++, ts: performance.now(), b: 0x2a5 });
+  }, 4);
+  const pingTimer = setInterval(() => conn.send({ t: 'ping', id: pingId++, ts: performance.now() }), 250);
+  const uiTimer = setInterval(() => { show(); sub('Testing… ' + Math.min(TEST_SECONDS, Math.round((performance.now() - t0) / 1000)) + ' / ' + TEST_SECONDS + ' s'); }, 500);
+  setTimeout(() => {
+    clearInterval(inputTimer); clearInterval(pingTimer);
+    for (let i = 0; i < 3; i++) setTimeout(() => conn.send({ t: 'end', sent: seq }), i * 100); // unreliable channel: repeat
+    setTimeout(() => {
+      clearInterval(uiTimer);
+      testDone = true;
+      conn.send(Object.assign({ t: 'sum' }, mine()));
+      setTimeout(() => { show(); state('DONE', 'ok'); sub('Test finished. Read the numbers below.'); Poku.haptic('success'); showIce(); setTimeout(reportOut, 1500); }, 1500);
+    }, 1500);
+  }, TEST_SECONDS * 1000);
+}
+
+function pct(a, q) { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : NaN; }
+
+function mine() {
+  // What the other side actually sent (a throttled background tab sends fewer), else the nominal count.
+  const expected = rx.peerSent || TEST_SECONDS * RATE;
+  const got = Math.min(rx.count, expected);
+  return {
+    got, expected, loss: (expected - got) / expected * 100, ooo: rx.ooo,
+    jitter: rx.jitterN ? rx.jitter / rx.jitterN : NaN, maxGap: rx.maxGap,
+    rttMed: pct(rtts, 0.5), rttP95: pct(rtts, 0.95), rttMax: rtts.length ? Math.max(...rtts) : NaN, pings: rtts.length,
+  };
+}
+
+function show() {
+  const m = mine();
+  $('rtt').innerHTML = `RTT ${m.rttMed.toFixed(0)} ms <span class="mid dim">(p95 ${m.rttP95.toFixed(0)}, max ${m.rttMax.toFixed(0)}, ${m.pings} pings)</span>`;
+  const lossCls = m.loss < 1 ? 'ok' : m.loss < 5 ? 'warn' : 'bad';
+  $('stream').innerHTML = `Received ${m.got} / ${m.expected} input msgs: <span class="${lossCls}">loss ${testDone ? m.loss.toFixed(2) : '…'}%</span>, ` +
+    `jitter ${m.jitter.toFixed(1)} ms, longest gap ${m.maxGap.toFixed(0)} ms, out of order ${m.ooo}`;
+  if (summaryFromPeer) {
+    const p = summaryFromPeer;
+    $('peerstats').textContent = `Other phone received: loss ${p.loss.toFixed(2)}%, jitter ${p.jitter.toFixed(1)} ms, longest gap ${p.maxGap.toFixed(0)} ms, RTT median ${p.rttMed.toFixed(0)} ms`;
+  }
+}
+
+async function showIce() {
+  const pc = conn && conn.peerConnection;
+  if (!pc) return;
+  try {
+    const stats = await pc.getStats();
+    const byId = {}, local = new Set(), remote = new Set();
+    let pairId = null;
+    stats.forEach(s => {
+      byId[s.id] = s;
+      if (s.type === 'local-candidate') local.add(s.candidateType + '/' + (s.protocol || '?'));
+      if (s.type === 'remote-candidate') remote.add(s.candidateType + '/' + (s.protocol || '?'));
+      if (s.type === 'transport' && s.selectedCandidatePairId) pairId = s.selectedCandidatePairId;
+    });
+    if (!pairId) stats.forEach(s => { if (s.type === 'candidate-pair' && s.state === 'succeeded' && (s.nominated || s.selected)) pairId = s.id; });
+    const pair = pairId && byId[pairId];
+    if (pair) {
+      const l = byId[pair.localCandidateId], r = byId[pair.remoteCandidateId];
+      selected = `${l.candidateType} ↔ ${r.candidateType} over ${l.protocol}` + (l.networkType ? ` (${l.networkType})` : '');
+    }
+    $('results').style.display = '';
+    $('ice').innerHTML = `Path: <b>${selected || 'none selected'}</b><br><span class="dim">ICE candidates gathered here: ${[...local].join(', ') || '-'}; from the other side: ${[...remote].join(', ') || '-'}</span>`;
+    log('ICE selected: ' + (selected || 'none') + ' | local ' + [...local].join(',') + ' | remote ' + [...remote].join(','));
+  } catch (e) { log('getStats failed: ' + e); }
+}
+
+function reportOut() {
+  if (qp.get('report')) fetch('/report/' + qp.get('report'), { method: 'POST', body: document.body.innerText });
+}
+
+$('create').onclick = () => create();
+$('join').onclick = () => join($('code').value);
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') join($('code').value); });
+const startParam = Poku.inTelegram && Poku.tg.initDataUnsafe && Poku.tg.initDataUnsafe.start_param;
+if (qp.get('join') || startParam) { const c = qp.get('join') || startParam; $('code').value = c; join(c); }
+else if (qp.get('host')) create(qp.get('host'));
+</script>
+</body>
+</html>
