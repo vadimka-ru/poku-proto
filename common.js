@@ -10,6 +10,9 @@
       if (!/\/(index\.html)?$/.test(location.pathname) || /\/(sim|rtc|godot)\//.test(location.pathname)) {
         tg.BackButton.show();
         tg.BackButton.onClick(function () { location.href = '../'; });
+      } else {
+        // The root page: Telegram keeps the back arrow shown across page loads, so hide it here or the close button never returns.
+        tg.BackButton.hide();
       }
     } catch (e) {}
   }
