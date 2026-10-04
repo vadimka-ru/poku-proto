@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="common.css">
 <script src="common.js"></script>
 <script>
-  // A room link (t.me/poku_game_bot?startapp=CODE) opens this page: go straight to the WebRTC test.
+  // A room link (t.me/poku_game_bot?startapp=CODE) opens this page: go straight into the game's room.
   (function () {
     var sp = Poku.inTelegram && Poku.tg.initDataUnsafe && Poku.tg.initDataUnsafe.start_param;
-    if (sp) location.replace('rtc/?join=' + encodeURIComponent(sp));
+    if (sp) location.replace('match/play/?perf=1&room=' + encodeURIComponent(sp));
   })();
 </script>
 </head>
