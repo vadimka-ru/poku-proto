@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poku match preview</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="../common.css">
+<script src="play/tg.js"></script>
+</head>
+<body>
+<h1>Poku: match preview</h1>
+<div class="card"><div class="mid">Six bots, one arena</div>
+<div class="dim">Godot client (GDScript) + the real simulation in WebAssembly. No controls or HUD yet: you watch a bot match and read the numbers in the top-left corner. Turn the phone to landscape before you tap. First load is about 12 MB.</div></div>
+<a class="btn" href="play/">Quick start: city, deathmatch</a>
+<h2>Deathmatch (pvp)</h2>
+<div id="dm"></div>
+<h2>Capture (pvp-points)</h2>
+<div id="cp"></div>
+<h2>What to read off the screen</h2>
+<div class="card dim">Top-left overlay: FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame (simulation step plus snapshot), dropped ticks, platform. Screenshot it after 30 seconds of play. Add <span class="mono">&amp;perf=0</span> to a link to hide it, <span class="mono">&amp;seed=N</span> or <span class="mono">&amp;seat=0..5</span> to change the match.</div>
+<div class="dim">Build <span id="build"></span> <a href="../">prototype tests</a></div>
+<script>
+  var maps = ['city', 'forest', 'lava', 'planet', 'pole', 'ship'];
+  function fill(id, cfg) {
+    document.getElementById(id).innerHTML = maps.map(function (m) {
+      return '<a class="btn secondary" href="play/?map=' + m + '&config=' + cfg + '">' + m + '</a>';
+    }).join('');
+  }
+  fill('dm', 'pvp'); fill('cp', 'pvp-points');
+  document.getElementById('build').textContent = document.lastModified;
+</script>
+</body>
+</html>
