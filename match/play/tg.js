@@ -18,5 +18,8 @@
   try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {}
   try { if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch (e) {}
   try { if (tg.lockOrientation && innerWidth > innerHeight) tg.lockOrientation(); } catch (e) {}
+  // The game page (window.__pokuGame, set by its own head) drives the Back button itself (client/platform/Telegram.gd: hidden on the start screen and in a
+  // match, 'back to start' in the join/lobby screens). Every other page using this file (match/index.html) keeps Back = up to the root index.
+  if (window.__pokuGame) { try { tg.BackButton.hide(); } catch (e) {} return; }
   try { tg.BackButton.show(); tg.BackButton.onClick(function () { location.href = '../'; }); } catch (e) {}
 })();
