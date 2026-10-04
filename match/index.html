@@ -3,41 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Poku match preview</title>
+<title>Poku match</title>
+<link rel="icon" href="data:,">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="../common.css">
 <script src="play/tg.js"></script>
 </head>
 <body>
-<h1>Poku: match preview</h1>
-<div class="card"><div class="mid">Six fighters, one arena</div>
-<div class="dim">Godot client (GDScript) + the real simulation in WebAssembly, now with the HUD and controls: you play seat 0, the other five are bots. Phone: left thumb moves, right thumb aims and shoots, SUPER and emote buttons. Turn the phone to landscape before you tap. First load is about 12 MB.</div></div>
-<a class="btn" id="quick" href="play/">Quick start: city, deathmatch (touch)</a>
-<h2>Touch (phone)</h2>
-<div class="dim" style="margin:10px 0 4px">Deathmatch (pvp)</div>
+<h1>Poku: match</h1>
+<div class="card"><div class="mid">You and five bots, one arena</div>
+<div class="dim">Godot client (GDScript) with the real simulation in WebAssembly. Turn the phone to landscape before you tap. Left thumb moves, right thumb shoots (tap = one shot at the nearest enemy, hold = keep shooting, drag = aim by hand), the lightning button is your super, the smiley sends an emote, the bars in the corner pause. First load is about 12 MB.</div></div>
+<a class="btn" href="play/?perf=1">Quick start: city, deathmatch</a>
+<h2>Deathmatch (pvp)</h2>
 <div id="dm"></div>
-<div class="dim" style="margin:10px 0 4px">Capture (pvp-points)</div>
+<h2>Capture (pvp-points)</h2>
 <div id="cp"></div>
-<h2>Keyboard + mouse (desktop test)</h2>
-<div class="dim">WASD or arrows move, left button attacks at the cursor, right button holds the super zone, 1-5 emotes, Esc pause.</div>
-<div class="dim" style="margin:10px 0 4px">Deathmatch (pvp)</div>
-<div id="dmk"></div>
-<div class="dim" style="margin:10px 0 4px">Capture (pvp-points)</div>
-<div id="cpk"></div>
-<h2>What to read off the screen</h2>
-<div class="card dim">Top-left overlay: FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame (simulation step plus snapshot), dropped ticks, platform and build. Screenshot it after 30 seconds of play. Link options: <span class="mono">perf=0</span> hides the overlay, <span class="mono">seed=N</span>, <span class="mono">seat=0..5</span>, <span class="mono">touch=0|1</span>, <span class="mono">no-hud</span>.</div>
-<div class="dim">Build <b class="mono" id="build"></b> <a href="../">prototype tests</a></div>
+<h2>On a computer</h2>
+<div class="card dim">Keyboard and mouse: WASD / arrows move, left button shoots at the cursor, right button (hold and release) is the super, 1-5 emotes, Esc pauses. Add <span class="mono">&amp;touch=1</span> to a link to get the phone controls with the mouse.</div>
+<h2>Read-outs</h2>
+<div class="card dim">Top-left overlay (on in these links): FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame, dropped ticks, platform. Tap the very top-left corner to hide or show it. Links accept <span class="mono">&amp;perf=0</span>, <span class="mono">&amp;seed=N</span>, <span class="mono">&amp;seat=0..5</span>, <span class="mono">&amp;haptics=1</span> (Telegram vibration on your shots, super and death).</div>
+<div class="dim">Build <span id="build"></span> <a href="../">prototype tests</a></div>
 <script>
-  var BUILD = "e933767 2026-10-04 15:17";
   var maps = ['city', 'forest', 'lava', 'planet', 'pole', 'ship'];
-  function fill(id, cfg, touch) {
+  function fill(id, cfg) {
     document.getElementById(id).innerHTML = maps.map(function (m) {
-      return '<a class="btn secondary" href="play/?map=' + m + '&config=' + cfg + '&human=1&touch=' + touch + '&perf=1">' + m + '</a>';
+      return '<a class="btn secondary" href="play/?perf=1&map=' + m + '&config=' + cfg + '">' + m + '</a>';
     }).join('');
   }
-  fill('dm', 'pvp', 1); fill('cp', 'pvp-points', 1); fill('dmk', 'pvp', 0); fill('cpk', 'pvp-points', 0);
-  document.getElementById('quick').href = 'play/?map=city&config=pvp&human=1&touch=1&perf=1';
-  document.getElementById('build').textContent = BUILD;
+  fill('dm', 'pvp'); fill('cp', 'pvp-points');
+  document.getElementById('build').textContent = document.lastModified;
 </script>
 </body>
 </html>

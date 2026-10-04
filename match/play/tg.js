@@ -1,4 +1,5 @@
-// Telegram Mini App setup for the match preview (same calls as the prototype's common.js, plus landscape lock).
+// Runs in the page head, before the engine downloads (the game's own client/platform/Telegram.gd repeats these calls: all idempotent):
+// the Mini App setup the prototype's common.js does, so Telegram drops its splash and goes full screen while the 12 MB load.
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (!(tg && tg.platform && tg.platform !== 'unknown')) return;
