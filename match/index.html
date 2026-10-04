@@ -10,25 +10,34 @@
 </head>
 <body>
 <h1>Poku: match preview</h1>
-<div class="card"><div class="mid">Six bots, one arena</div>
-<div class="dim">Godot client (GDScript) + the real simulation in WebAssembly. No controls or HUD yet: you watch a bot match and read the numbers in the top-left corner. Turn the phone to landscape before you tap. First load is about 12 MB.</div></div>
-<a class="btn" href="play/">Quick start: city, deathmatch</a>
-<h2>Deathmatch (pvp)</h2>
+<div class="card"><div class="mid">Six fighters, one arena</div>
+<div class="dim">Godot client (GDScript) + the real simulation in WebAssembly, now with the HUD and controls: you play seat 0, the other five are bots. Phone: left thumb moves, right thumb aims and shoots, SUPER and emote buttons. Turn the phone to landscape before you tap. First load is about 12 MB.</div></div>
+<a class="btn" id="quick" href="play/">Quick start: city, deathmatch (touch)</a>
+<h2>Touch (phone)</h2>
+<div class="dim" style="margin:10px 0 4px">Deathmatch (pvp)</div>
 <div id="dm"></div>
-<h2>Capture (pvp-points)</h2>
+<div class="dim" style="margin:10px 0 4px">Capture (pvp-points)</div>
 <div id="cp"></div>
+<h2>Keyboard + mouse (desktop test)</h2>
+<div class="dim">WASD or arrows move, left button attacks at the cursor, right button holds the super zone, 1-5 emotes, Esc pause.</div>
+<div class="dim" style="margin:10px 0 4px">Deathmatch (pvp)</div>
+<div id="dmk"></div>
+<div class="dim" style="margin:10px 0 4px">Capture (pvp-points)</div>
+<div id="cpk"></div>
 <h2>What to read off the screen</h2>
-<div class="card dim">Top-left overlay: FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame (simulation step plus snapshot), dropped ticks, platform. Screenshot it after 30 seconds of play. Add <span class="mono">&amp;perf=0</span> to a link to hide it, <span class="mono">&amp;seed=N</span> or <span class="mono">&amp;seat=0..5</span> to change the match.</div>
-<div class="dim">Build <span id="build"></span> <a href="../">prototype tests</a></div>
+<div class="card dim">Top-left overlay: FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame (simulation step plus snapshot), dropped ticks, platform and build. Screenshot it after 30 seconds of play. Link options: <span class="mono">perf=0</span> hides the overlay, <span class="mono">seed=N</span>, <span class="mono">seat=0..5</span>, <span class="mono">touch=0|1</span>, <span class="mono">no-hud</span>.</div>
+<div class="dim">Build <b class="mono" id="build"></b> <a href="../">prototype tests</a></div>
 <script>
+  var BUILD = "e933767 2026-10-04 15:17";
   var maps = ['city', 'forest', 'lava', 'planet', 'pole', 'ship'];
-  function fill(id, cfg) {
+  function fill(id, cfg, touch) {
     document.getElementById(id).innerHTML = maps.map(function (m) {
-      return '<a class="btn secondary" href="play/?map=' + m + '&config=' + cfg + '">' + m + '</a>';
+      return '<a class="btn secondary" href="play/?map=' + m + '&config=' + cfg + '&human=1&touch=' + touch + '&perf=1">' + m + '</a>';
     }).join('');
   }
-  fill('dm', 'pvp'); fill('cp', 'pvp-points');
-  document.getElementById('build').textContent = document.lastModified;
+  fill('dm', 'pvp', 1); fill('cp', 'pvp-points', 1); fill('dmk', 'pvp', 0); fill('cpk', 'pvp-points', 0);
+  document.getElementById('quick').href = 'play/?map=city&config=pvp&human=1&touch=1&perf=1';
+  document.getElementById('build').textContent = BUILD;
 </script>
 </body>
 </html>
