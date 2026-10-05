@@ -6,7 +6,7 @@ window.__simError = "";
 (async function () {
   try {
     const t0 = performance.now();
-    const { dotnet } = await import("./poku-2d2b51a-bridge/_framework/dotnet.js");
+    const { dotnet } = await import("./poku-4c62357-bridge/_framework/dotnet.js");
     const runtime = await dotnet.withDiagnosticTracing(false).create();
     const exports = await runtime.getAssemblyExports(runtime.getConfig().mainAssemblyName);
     window.SimWasm = exports.SimWasm;
