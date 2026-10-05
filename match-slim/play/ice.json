@@ -1,0 +1,20 @@
+{
+	"_doc": "ICE servers for WebRTC, read at runtime next to the page (web) or from res://web/ice.json / user://ice.json (Mac). Edit and re-upload this file: no rebuild. 'stun': plain STUN urls (direct paths through NAT). 'turn': relay servers, the fallback when no direct path exists (symmetric NAT of mobile carriers): each {urls: [..] or string, username, credential}; entries with empty urls are ignored. Example: {\"urls\": [\"turn:global.relay.metered.ca:80\", \"turn:global.relay.metered.ca:443?transport=tcp\", \"turns:global.relay.metered.ca:443?transport=tcp\"], \"username\": \"<key user>\", \"credential\": \"<key credential>\"}",
+	"stun": [
+		"stun:stun.relay.metered.ca:80",
+		"stun:stun.l.google.com:19302",
+		"stun:stun.cloudflare.com:3478"
+	],
+	"turn": [
+		{
+			"urls": [
+				"turn:global.relay.metered.ca:80",
+				"turn:global.relay.metered.ca:80?transport=tcp",
+				"turn:global.relay.metered.ca:443",
+				"turns:global.relay.metered.ca:443?transport=tcp"
+			],
+			"username": "f5dc1ece72fba26c0a26ef28",
+			"credential": "JiVKXeWFVHsKoPLG"
+		}
+	]
+}

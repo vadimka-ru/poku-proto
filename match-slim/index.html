@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poku match</title>
+<link rel="icon" href="data:,">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="../common.css">
+<script src="play/poku-30f0f85-tg.js"></script>
+</head>
+<body>
+<h1>Poku: match</h1>
+<div class="card"><div class="mid">You and five bots, one arena</div>
+<div class="dim">Godot client (GDScript) with the real simulation in WebAssembly. Turn the phone to landscape before you tap. Left thumb moves, right thumb shoots (tap = one shot at the nearest enemy, hold = keep shooting, drag = aim by hand), the lightning button is your super, the round portrait in the corner sends an emote, pause is Telegram's Back arrow (the bars in the corner outside Telegram). First load is about 9 MB.</div></div>
+<a class="btn" href="play/?perf=1&v=poku-30f0f85">Quick start: city, deathmatch</a>
+<h2>Deathmatch (pvp)</h2>
+<div id="dm"></div>
+<h2>Capture (pvp-points)</h2>
+<div id="cp"></div>
+<h2>On a computer</h2>
+<div class="card dim">Keyboard and mouse: WASD / arrows move, left button shoots at the cursor, right button (hold and release) is the super, 1-5 emotes, Esc pauses. Add <span class="mono">&amp;touch=1</span> to a link to get the phone controls with the mouse.</div>
+<h2>Read-outs</h2>
+<div class="card dim">Top-left overlay (on in these links): FPS, mean and p99 frame time over the last 300 frames, bridge ms per frame, dropped ticks, platform. Tap the very top-left corner to hide or show it. Links accept <span class="mono">&amp;perf=0</span>, <span class="mono">&amp;seed=N</span>, <span class="mono">&amp;seat=0..5</span>, <span class="mono">&amp;haptics=1</span> (Telegram vibration on your shots, super and death).</div>
+<div class="dim">Build <span id="build"></span> <a href="../">prototype tests</a></div>
+<script>
+  var maps = ['city', 'forest', 'lava', 'planet', 'pole', 'ship'];
+  function fill(id, cfg) {
+    document.getElementById(id).innerHTML = maps.map(function (m) {
+      return '<a class="btn secondary" href="play/?perf=1&v=poku-30f0f85&map=' + m + '&config=' + cfg + '">' + m + '</a>';
+    }).join('');
+  }
+  fill('dm', 'pvp'); fill('cp', 'pvp-points');
+  document.getElementById('build').textContent = '30f0f85 2026-10-05 15:44';
+</script>
+</body>
+</html>

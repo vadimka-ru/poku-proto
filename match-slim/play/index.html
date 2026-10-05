@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<!-- The game page (play/index.html), filled in by tools/web-build.sh: the build id, the build string and the manifest (the exact byte length and the gzip size GitHub Pages
+     sends, for every file of the game) are put in where the three placeholders stand below. This file replaces the Godot export template's page: the loader is inline so
+     that the downloads start with the first byte of the HTML: the engine, the .pck and the bridge in parallel, one progress bar. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="theme-color" content="#1f2433">
+<title>Poku</title>
+<link rel="icon" href="data:,">
+<style>
+:root { --bg: #1f2433; --ink: #f0ebe0; --muted: #9994a8; --track: #292136; --gold: #ffd14d; --err: #ff8a80; }
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { color: var(--ink); background-color: var(--bg); overflow: hidden; touch-action: none; }
+#canvas { display: block; }
+#canvas:focus { outline: none; }
+/* the loading screen: fixed boxes, so nothing moves when the text changes; the colour is the engine's clear colour, so it fades into the game without a flash */
+#splash { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 42%, #2a3149 0%, var(--bg) 70%); font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-user-select: none; user-select: none; transition: opacity .22s ease-out; }
+#splash.out { opacity: 0; pointer-events: none; }
+#box { position: relative; width: min(76vw, 380px); height: 176px; }
+#title { position: absolute; left: 0; right: 0; top: 0; text-align: center; font-weight: 800; letter-spacing: .16em; text-indent: .16em; font-size: clamp(34px, 9vmin, 54px); line-height: 1.1; color: var(--ink); }
+#bar { position: absolute; left: 0; right: 0; top: 84px; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+#fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 4px; background: var(--gold); transform: scaleX(0); transform-origin: 0 50%; }
+#row { position: absolute; left: 0; right: 0; top: 104px; height: 20px; display: flex; justify-content: space-between; font-size: 12px; line-height: 20px; letter-spacing: .16em; color: var(--muted); }
+#pct { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+#err { position: absolute; left: 0; right: 0; top: 104px; display: none; text-align: center; }
+#errt { font-size: 15px; line-height: 1.35; color: var(--ink); }
+#errd { margin-top: 4px; font-size: 11px; line-height: 1.3; color: var(--muted); word-break: break-word; max-height: 3.9em; overflow: hidden; }
+#retry { margin-top: 10px; min-height: 44px; padding: 0 26px; border: 0; border-radius: 10px; background: var(--gold); color: #1b1710; font-family: inherit; font-weight: 700; font-size: 14px; letter-spacing: .12em; cursor: pointer; }
+#splash.bad #row { display: none; } #splash.bad #err { display: block; } #splash.bad #fill { background: var(--err); }
+noscript { position: fixed; left: 0; right: 0; top: 40%; text-align: center; z-index: 11; }
+</style>
+<script>window.__pokuGame = true; window.__pokuSplashColor = '#1f2433'; window.__pokuBuild = "30f0f85 2026-10-05 15:44"; window.__pokuManifest = {"base":"poku-30f0f85","files":[{"n":"poku-30f0f85.wasm","k":"engine","s":16187276,"g":4795045},{"n":"poku-30f0f85.pck","k":"pck","s":1248948,"g":956679},{"n":"poku-30f0f85-bridge/_framework/Bridge.wasm","k":"bridge","s":86805,"g":35477},{"n":"poku-30f0f85-bridge/_framework/BridgeWasm.wasm","k":"bridge","s":15125,"g":4753},{"n":"poku-30f0f85-bridge/_framework/Progress.wasm","k":"bridge","s":55061,"g":25191},{"n":"poku-30f0f85-bridge/_framework/Sim.wasm","k":"bridge","s":194837,"g":78996},{"n":"poku-30f0f85-bridge/_framework/System.Collections.Concurrent.wasm","k":"bridge","s":20757,"g":9159},{"n":"poku-30f0f85-bridge/_framework/System.Collections.wasm","k":"bridge","s":45333,"g":19716},{"n":"poku-30f0f85-bridge/_framework/System.Linq.wasm","k":"bridge","s":22805,"g":10584},{"n":"poku-30f0f85-bridge/_framework/System.Memory.wasm","k":"bridge","s":12565,"g":5842},{"n":"poku-30f0f85-bridge/_framework/System.Private.CoreLib.wasm","k":"bridge","s":1214741,"g":466217},{"n":"poku-30f0f85-bridge/_framework/System.Private.Uri.wasm","k":"bridge","s":57109,"g":25928},{"n":"poku-30f0f85-bridge/_framework/System.Runtime.InteropServices.JavaScript.wasm","k":"bridge","s":22805,"g":10304},{"n":"poku-30f0f85-bridge/_framework/System.Runtime.wasm","k":"bridge","s":7445,"g":2623},{"n":"poku-30f0f85-bridge/_framework/System.Text.Encodings.Web.wasm","k":"bridge","s":27413,"g":9779},{"n":"poku-30f0f85-bridge/_framework/System.Text.Json.wasm","k":"bridge","s":326933,"g":128556},{"n":"poku-30f0f85-bridge/_framework/blazor.boot.json","k":"bridge","s":1843,"g":1039},{"n":"poku-30f0f85-bridge/_framework/dotnet.native.wasm","k":"bridge","s":5218566,"g":1909674}],"rest":["poku-30f0f85-bridge/_framework/dotnet.js","poku-30f0f85-bridge/_framework/dotnet.native.8.0.31.rbm102v8ef.js","poku-30f0f85-bridge/_framework/dotnet.runtime.8.0.31.jiuo79exzt.js","poku-30f0f85.js","poku-30f0f85.audio.worklet.js","poku-30f0f85.audio.position.worklet.js","poku-30f0f85-tg.js","poku-30f0f85-render-res.js","poku-30f0f85-bridge-loader.js"],"total":24766367,"totalGzip":8495562};</script>
+<script>
+// ---- The loader. Everything starts here, at the first byte of the page: the engine (.wasm), the .pck and the files of the simulation bridge download at the same time,
+// ONE progress bar counts them all (each file weighs what it costs on the wire: the manifest has its gzip size, and the loaded part of it is bytes / exact length),
+// then the engine starts; the loading screen goes away when the first frame is drawn and the bridge is up.
+(function () {
+  'use strict';
+  var M = window.__pokuManifest, BASE = M.base;
+  var T0 = performance.now();
+  var marks = {}, load = window.__pokuLoad = { marks: marks, line: '', src: '', bytes: 0, parts: {} };
+  function mark(name) { if (!(name in marks)) marks[name] = Math.round(performance.now() * 10) / 10; }
+  window.__pokuMark = mark;
+  marks.htmlStart = Math.round(T0 * 10) / 10;
+  var params = new URLSearchParams(location.search);
+  var realFetch = window.fetch ? window.fetch.bind(window) : null;
+  var canStream = !!(realFetch && window.ReadableStream && window.Response && typeof Response.prototype.clone === 'function');
+  function abs(u) { return new URL(u, location.href).href; }
+  function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  // ---- progress model
+  var files = {}, order = [], totalW = 0, loadedBytes = 0, lastBytesAt = performance.now(), state = 'loading', failed = false, hidden = false;
+  M.files.forEach(function (f) { var st = { n: f.n, k: f.k, size: Math.max(f.s, 1), w: Math.max(f.g || f.s, 1), loaded: 0, done: false }; files[f.n] = st; order.push(st); totalW += st.w; });
+  function progress() {
+    var p = 0;
+    for (var i = 0; i < order.length; i++) { var st = order[i]; p += st.w * (st.done ? 1 : Math.min(st.loaded / st.size, 1)); }
+    p = totalW > 0 ? p / totalW : 0;
+    return isFinite(p) ? Math.max(0, Math.min(1, p)) : 0;
+  }
+  function allDone() { for (var i = 0; i < order.length; i++) if (!order[i].done) return false; return true; }
+  function add(st, n) { st.loaded += n; loadedBytes += n; lastBytesAt = performance.now(); schedule(); }
+
+  // ---- the loading screen
+  var el = {}, shown = 0, dirty = false, raf = 0;
+  function ui() { if (!el.fill) { ['splash', 'fill', 'status', 'pct', 'errt', 'errd', 'retry'].forEach(function (id) { el[id] = document.getElementById(id); }); } return !!el.fill; }
+  function schedule() { if (!dirty) { dirty = true; raf = requestAnimationFrame(render); } }
+  function statusText() {
+    if (failed) return '';
+    if (allDone()) return 'STARTING';
+    if (performance.now() - lastBytesAt > 8000) return 'WAITING FOR THE NETWORK';
+    return 'LOADING GAME';
+  }
+  function render() {
+    dirty = false;
+    if (hidden || !ui()) return;
+    var p = progress();
+    if (p < shown) p = shown;           // never goes back
+    shown = p;
+    var pct = allDone() ? 100 : Math.min(99, Math.floor(p * 100));
+    el.fill.style.transform = 'scaleX(' + (allDone() ? 1 : p).toFixed(4) + ')';
+    el.pct.textContent = pct + '%';
+    var s = statusText();
+    if (el.status.textContent !== s) el.status.textContent = s;
+  }
+  setInterval(function () { if (!hidden && !failed) schedule(); }, 1000);   // the 'waiting' text appears even when no bytes move
+  function fail(msg, detail) {
+    if (failed || hidden) return;
+    failed = true; state = 'failed';
+    console.error('load failed:', msg, detail);
+    function show() {
+      if (!ui()) return;
+      el.splash.className = 'bad'; el.errt.textContent = msg; el.errd.textContent = detail ? String(detail).slice(0, 160) : '';
+      el.retry.onclick = function () { location.reload(); };
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show); else show();
+  }
+  function readable(e, what) {
+    var m = String((e && e.message) || e || '');
+    if (/WebGL|missing/i.test(m)) return 'This phone or browser cannot run the game (it needs WebGL 2).';
+    if (/Failed to fetch|NetworkError|network|Load failed|http \d+|Failed loading/i.test(m)) return 'The connection broke while loading the game. Check the internet and try again.';
+    return 'The game could not start.';
+  }
+
+  // ---- downloads: one tracked fetch per file, started now
+  var STREAM_RETRIES = 3;
+  function open(st) {
+    var url = abs(st.n);
+    function attempt(i) {
+      return realFetch(url).then(function (r) {
+        if (!r.ok) throw new Error('http ' + r.status + ' ' + st.n);
+        return r;
+      }).catch(function (e) { if (i < STREAM_RETRIES) return delay(700 * (i + 1)).then(function () { return attempt(i + 1); }); throw e; });
+    }
+    return attempt(0);
+  }
+  // a Response whose body is read at full speed from the start (not when the consumer gets round to it) and counted
+  function trackedResponse(st) {
+    return open(st).then(function (r) {
+      if (!canStream || !r.body) { return r.clone().arrayBuffer().then(function (b) { add(st, st.size - st.loaded); st.done = true; return r; }); }
+      var reader = r.body.getReader();
+      var stream = new ReadableStream({
+        start: function (c) {
+          (function pump() {
+            reader.read().then(function (x) {
+              if (x.done) { st.done = true; c.close(); schedule(); return; }
+              add(st, x.value.length); c.enqueue(x.value); pump();
+            }, function (e) { c.error(e); fail(readable(e), st.n + ': ' + (e && e.message)); });
+          })();
+        }
+      });
+      return new Response(stream, { status: 200, headers: r.headers });
+    });
+  }
+  function readAll(st) {
+    return open(st).then(function (r) {
+      if (!canStream || !r.body) return r.arrayBuffer().then(function (b) { add(st, st.size - st.loaded); st.done = true; return b; });
+      var reader = r.body.getReader(), parts = [], n = 0;
+      return (function pump() {
+        return reader.read().then(function (x) {
+          if (x.done) { st.done = true; schedule(); var out = new Uint8Array(n), o = 0; parts.forEach(function (p) { out.set(p, o); o += p.length; }); return out.buffer; }
+          parts.push(x.value); n += x.value.length; add(st, x.value.length); return pump();
+        });
+      })();
+    });
+  }
+
+  var ready = { started: false };
+  var wasmName = BASE + '.wasm', packName = BASE + '.pck';
+  var wasmP = null, pckP = null;
+  window.__pokuEarly = {};
+  // engine wasm: Godot fetch()es it itself; hand it our already running download (once)
+  if (canStream) {
+    wasmP = trackedResponse(files[wasmName]); wasmP.catch(function () {});
+    var wasmUrl = abs(wasmName);
+    window.fetch = function (input, init) {
+      var u = typeof input === 'string' ? input : (input && input.url);
+      if (wasmP && u && abs(u) === wasmUrl && !(init && init.method && init.method !== 'GET')) { var p = wasmP; wasmP = null; return p; }
+      return realFetch.apply(window, arguments);
+    };
+  }
+  pckP = readAll(files[packName]); pckP.catch(function (e) { fail(readable(e), packName + ': ' + (e && e.message)); });
+  mark('requested');
+  // the bridge: skipped when the .NET runtime already has the files in its own cache (it looks there first and would never ask us)
+  function bridgeCached() {
+    if (!window.caches) return Promise.resolve(false);
+    var name = 'dotnet-resources' + document.baseURI.substring(location.origin.length);
+    return caches.has(name).then(function (has) {
+      if (!has) return false;
+      return caches.open(name).then(function (c) { return c.keys(); }).then(function (ks) { return ks.some(function (r) { return r.url.indexOf(BASE + '-bridge/_framework/dotnet.native.wasm') >= 0; }); });
+    }).catch(function () { return false; });
+  }
+  var cachedP = bridgeCached();
+  order.forEach(function (st) {
+    if (st.k !== 'bridge') return;
+    var key = st.n.substring(st.n.lastIndexOf('/') + 1), used = false;
+    var p = cachedP.then(function (cached) {
+      if (cached) { st.loaded = st.size; st.done = true; load.parts.bridgeCached = true; schedule(); return null; }
+      if (!canStream) { st.loaded = st.size; st.done = true; schedule(); return null; }
+      return trackedResponse(st);
+    });
+    p.catch(function () {});
+    // null = the runtime has this file in its own cache or we cannot stream: a plain download for the rare case it asks anyway
+    window.__pokuEarly[key] = { take: function () { if (used) return undefined; used = true; return p.then(function (r) { return r || realFetch(abs(st.n)); }); } };
+  });
+
+  // ---- scripts: Telegram's SDK (async, never allowed to hold the game back for more than 3 s), then our small head scripts, godot.js at once
+  function loadScript(src) {
+    return new Promise(function (res) { var s = document.createElement('script'); s.src = src; s.onload = function () { res(true); }; s.onerror = function () { res(false); }; document.head.appendChild(s); });
+  }
+  var godotJs = loadScript(BASE + '.js');
+  var glue = Promise.race([loadScript('https://telegram.org/js/telegram-web-app.js'), delay(3000)])
+    .then(function () { return loadScript(BASE + '-render-res.js'); })
+    .then(function () { return loadScript(BASE + '-tg.js'); });
+  loadScript(BASE + '-bridge-loader.js');     // the .NET runtime starts at once, next to the engine
+  var domReady = new Promise(function (res) { if (document.readyState !== 'loading') res(); else document.addEventListener('DOMContentLoaded', res); });
+  domReady.then(function () { ui(); render(); requestAnimationFrame(function () { requestAnimationFrame(function () { mark('splash'); }); }); });
+
+  // ---- first frame: the first draw call of the canvas, hooked until it happens
+  var drawn = false, drawHooks = [];
+  function hookDraws() {
+    ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced', 'drawRangeElements'].forEach(function (name) {
+      [window.WebGL2RenderingContext, window.WebGLRenderingContext].forEach(function (C) {
+        if (!C || !C.prototype[name]) return;
+        var orig = C.prototype[name];
+        C.prototype[name] = function () {
+          if (!drawn) { drawn = true; mark('firstDraw'); drawHooks.forEach(function (h) { h[0].prototype[h[1]] = h[2]; }); drawHooks = []; maybeHide(); }
+          return orig.apply(this, arguments);
+        };
+        drawHooks.push([C, name, orig]);
+      });
+    });
+  }
+  // The loading screen goes when the game itself has begun to draw its screens: the first draw call, the bridge up, and the game's own word (client/Main.gd calls
+  // window.__pokuGameUp on its third frame after the bridge is ready). An older .pck that never says it is waited for 6 s after the bridge, so the screen cannot stay for ever.
+  var gameUp = false;
+  window.__pokuGameUp = function () { gameUp = true; mark('gameUp'); maybeHide(); };
+  function maybeHide() {
+    if (hidden || failed) return;
+    var bridgeUp = window.__simReady === true;
+    var now = performance.now();
+    var late = now - (marks.started || Infinity) > 20000                                // the bridge is slow, or the draw hook missed: do not hold the screen for ever
+      || (drawn && bridgeUp && now - Math.max(marks.started || 0, marks.bridgeReady || 0) > 6000);
+    if (window.__simError) { fail('The game files could not be started.', window.__simError); return; }
+    if (!(drawn && bridgeUp && gameUp) && !late) { setTimeout(maybeHide, 100); return; }
+    requestAnimationFrame(function () { requestAnimationFrame(function () { finish(); }); });
+  }
+  function finish() {
+    if (hidden) return;
+    hidden = true; mark('firstFrame'); state = 'running';
+    ui(); if (el.splash) { el.splash.className = 'out'; setTimeout(function () { if (el.splash && el.splash.parentNode) el.splash.parentNode.removeChild(el.splash); }, 400); }
+    report();
+    afterLoad();
+  }
+  function report() {
+    var net = 0, count = 0;
+    try {
+      var names = {}; M.files.forEach(function (f) { names[abs(f.n)] = 1; });
+      performance.getEntriesByType('resource').forEach(function (e) { if (names[e.name]) { net += e.transferSize || 0; count++; } });
+    } catch (e) {}
+    var cached = load.parts.bridgeCached || false;
+    var sw = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    var src = net > 50000 ? 'net ' + (net / 1048576).toFixed(1) + ' MB' : (sw ? 'cache sw' : 'cache');
+    load.bytes = net; load.src = src;
+    var t = marks.firstFrame / 1000;
+    load.line = 'load ' + t.toFixed(1) + ' s (' + src + ')  engine ' + ((marks.engineReady || 0) / 1000).toFixed(1) + ' bridge ' + ((marks.bridgeReady || 0) / 1000).toFixed(1);
+    console.log('[poku] ' + load.line + ' marks ' + JSON.stringify(marks));
+  }
+
+  // ---- the opt-in service worker (?sw=1 keeps it on for this browser, ?sw=0 turns it off and clears it; default off: not verified in Telegram's WebViews)
+  function afterLoad() {
+    var want = null;
+    try { var q = params.get('sw'); if (q === '1' || q === '0') localStorage.setItem('poku.sw', q); want = localStorage.getItem('poku.sw'); } catch (e) { want = params.get('sw'); }
+    if (!('serviceWorker' in navigator)) return;
+    if (want === '1') {
+      navigator.serviceWorker.register('sw.js').then(function (reg) {
+        return navigator.serviceWorker.ready.then(function (r) {
+          var worker = r.active; if (!worker) return;
+          // the files just downloaded are in the HTTP cache: the worker copies them from there into its cache (never touching the network)
+          worker.postMessage({ warm: M.files.map(function (f) { return f.n; }).concat(M.rest) });
+        });
+      }).catch(function (e) { console.warn('service worker:', e); });
+    } else if (want === '0' || want === null) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
+      if (want === '0' && window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { if (k.indexOf('poku-') === 0) caches.delete(k); }); }).catch(function () {});
+    }
+  }
+
+  // ---- start (the watchdog: all the files are here and the game still has not drawn after a minute)
+  setInterval(function () { if (!hidden && !failed && allDone() && performance.now() - Math.max(lastBytesAt, marks.splash || 0) > 60000) fail('The game could not start.', 'timeout'); }, 5000);
+  Promise.all([godotJs, glue, domReady]).then(function (r) {
+    if (!r[0]) throw new Error('Failed loading ' + BASE + '.js');
+    var missing = Engine.getMissingFeatures({ threads: false });
+    if (missing.length) throw new Error('missing features: ' + missing.join(', '));
+    var engine = new Engine({ args: [], canvasResizePolicy: 2, ensureCrossOriginIsolationHeaders: false, executable: BASE, experimentalVK: false,
+      fileSizes: {}, focusCanvas: true, gdextensionLibs: [], serviceWorker: '' });
+    hookDraws();
+    var initP = engine.init(BASE).then(function () { mark('engineReady'); });
+    var packed = pckP.then(function (buf) { mark('pckReady'); return engine.preloadFile(buf, packName); });
+    return Promise.all([initP, packed]).then(function () {
+      ready.started = true;
+      return engine.start({ args: ['--main-pack', packName] });
+    }).then(function () { mark('started'); maybeHide(); });
+  }).catch(function (e) { fail(readable(e), e && (e.message || e)); });
+})();
+</script>
+</head>
+<body>
+<canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+<div id="splash" role="status" aria-live="polite">
+  <div id="box">
+    <div id="title">POKU</div>
+    <div id="bar"><div id="fill"></div></div>
+    <div id="row"><span id="status">LOADING GAME</span><span id="pct">0%</span></div>
+    <div id="err"><div id="errt"></div><div id="errd"></div><button id="retry" type="button">TRY AGAIN</button></div>
+  </div>
+</div>
+<noscript>Your browser does not support JavaScript.</noscript>
+</body>
+</html>
