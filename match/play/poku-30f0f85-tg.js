@@ -10,11 +10,18 @@
   } catch (e) { window.__pokuIce = { state: 'error', error: String(e) }; }
 })();
 // Runs in the page head, before the engine downloads (the game's own client/platform/Telegram.gd repeats these calls: all idempotent):
-// the Mini App setup the prototype's common.js does, so Telegram drops its splash and goes full screen while the 12 MB load.
+// the Mini App setup the prototype's common.js does, so Telegram drops its splash and goes full screen while the game loads.
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (!(tg && tg.platform && tg.platform !== 'unknown')) return;
   try { tg.ready(); tg.expand(); } catch (e) {}
+  // The loading screen's colour (web/play.html: --bg, also the engine's clear colour) for Telegram's own header, background and bottom bar, so no strip of another colour shows around it.
+  if (window.__pokuGame) {
+    var bg = window.__pokuSplashColor || '#1f2433';
+    try { if (tg.setHeaderColor) tg.setHeaderColor(bg); } catch (e) {}
+    try { if (tg.setBackgroundColor) tg.setBackgroundColor(bg); } catch (e) {}
+    try { if (tg.setBottomBarColor && tg.isVersionAtLeast && tg.isVersionAtLeast('7.10')) tg.setBottomBarColor(bg); } catch (e) {}
+  }
   try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {}
   try { if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0') && tg.requestFullscreen && !tg.isFullscreen) tg.requestFullscreen(); } catch (e) {}
   try { if (tg.lockOrientation && innerWidth > innerHeight) tg.lockOrientation(); } catch (e) {}
