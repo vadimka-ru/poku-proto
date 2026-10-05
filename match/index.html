@@ -7,13 +7,13 @@
 <link rel="icon" href="data:,">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="stylesheet" href="../common.css">
-<script src="play/poku-cd7b607-tg.js"></script>
+<script src="play/poku-2d2b51a-tg.js"></script>
 </head>
 <body>
 <h1>Poku: match</h1>
 <div class="card"><div class="mid">You and five bots, one arena</div>
 <div class="dim">Godot client (GDScript) with the real simulation in WebAssembly. Turn the phone to landscape before you tap. Left thumb moves, right thumb shoots (tap = one shot at the nearest enemy, hold = keep shooting, drag = aim by hand), the lightning button is your super, the round portrait in the corner sends an emote, pause is Telegram's Back arrow (the bars in the corner outside Telegram). First load is about 12 MB.</div></div>
-<a class="btn" href="play/?perf=1&v=poku-cd7b607">Quick start: city, deathmatch</a>
+<a class="btn" href="play/?perf=1&v=poku-2d2b51a">Quick start: city, deathmatch</a>
 <h2>Deathmatch (pvp)</h2>
 <div id="dm"></div>
 <h2>Capture (pvp-points)</h2>
@@ -27,11 +27,11 @@
   var maps = ['city', 'forest', 'lava', 'planet', 'pole', 'ship'];
   function fill(id, cfg) {
     document.getElementById(id).innerHTML = maps.map(function (m) {
-      return '<a class="btn secondary" href="play/?perf=1&v=poku-cd7b607&map=' + m + '&config=' + cfg + '">' + m + '</a>';
+      return '<a class="btn secondary" href="play/?perf=1&v=poku-2d2b51a&map=' + m + '&config=' + cfg + '">' + m + '</a>';
     }).join('');
   }
   fill('dm', 'pvp'); fill('cp', 'pvp-points');
-  document.getElementById('build').textContent = 'cd7b607 2026-10-05 09:50';
+  document.getElementById('build').textContent = '2d2b51a 2026-10-05 12:40';
 </script>
 </body>
 </html>

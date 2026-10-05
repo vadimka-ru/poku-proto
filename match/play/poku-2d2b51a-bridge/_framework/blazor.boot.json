@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "BridgeWasm",
   "resources": {
-    "hash": "sha256-baYnZauXm8T2P7+waIT0DiohPhPPcuKdMFSMrZxTvts=",
+    "hash": "sha256-kc8J+pCQbyPb9Lp6/ih9b1Wp+v9KG2AAVhL+/873i0M=",
     "jsModuleNative": {
       "dotnet.native.8.0.31.rbm102v8ef.js": "sha256-xPpLS/PLWzdLT+Cj8ge8kPM5ZVzaeZgxzPQxUl7x9V0="
     },
@@ -9,13 +9,13 @@
       "dotnet.runtime.8.0.31.jiuo79exzt.js": "sha256-qzVt86q0GKgDNek5+WFBz2hU8jGxI86YJeZmNGXj/qM="
     },
     "wasmNative": {
-      "dotnet.native.wasm": "sha256-aSPlLAQ+Ms5unviqBDLr4vcCY1DURtBOPhubbT0zc4c="
+      "dotnet.native.wasm": "sha256-4uGnQyTWx68hjUcxIFwJna+EG6JH3ft6/Lfm9RymQV8="
     },
     "assembly": {
-      "Bridge.wasm": "sha256-dv0fZmyT3tIl4Wbe3YF1qc5rTf+z7vUre+OuzB4979Y=",
-      "BridgeWasm.wasm": "sha256-OohBSy1ASUHsl1Cq/WvqIxv4+REPoOngvMRb/OjxFHI=",
-      "Progress.wasm": "sha256-ThjlblOFkwyi6I3dGb2GoT2QtSkTJot0rL1HwxWI//s=",
-      "Sim.wasm": "sha256-2jQM5fc8dvTCHjFJsvyGox7x/XBHQVx5LwUVloCLYxU=",
+      "Bridge.wasm": "sha256-vzDyIueRLWmfkWDymjyJan9tmwkcQ/du/19Zu7KeFKU=",
+      "BridgeWasm.wasm": "sha256-waiQibM4ag7qyAhhtKj3055mueAYY9NUyuepjFrCoHQ=",
+      "Progress.wasm": "sha256-pkLn0q/3AwN3fg09tdG3yqukevFDzRF20f7W1oHg48g=",
+      "Sim.wasm": "sha256-6+kXCprUCt2p5+lCZP7+cKUV3BlVXgmtEzi/Zcl4etk=",
       "System.Collections.Concurrent.wasm": "sha256-wPt/dwuKZW36Hbh3BtQE9NFN4o9NSx7pO6UxzTA1OjU=",
       "System.Collections.wasm": "sha256-MWzQ2Ov1rlwbbg0pcdr0H7dxvKNuax+b9lmSkPIYXno=",
       "System.Linq.wasm": "sha256-Zgpq6/IoI5vSW6XnyVAUQv7eLzW1VMWmoYfmlxodByg=",
