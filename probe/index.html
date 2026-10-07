@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Poku net probe</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 16px; background: #1f2433; color: #e8ecf5; font: 15px/1.4 -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { margin: 6px 0; color: #aeb6c9; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 8px; border: 1px solid #3a4260; background: #151a28; color: inherit; font-size: 16px; }
+  button { width: 100%; padding: 14px; margin: 6px 0; border: 0; border-radius: 10px; background: #4d7cff; color: #fff; font-size: 16px; font-weight: 600; }
+  button:disabled { background: #3a4260; }
+  pre, textarea { width: 100%; box-sizing: border-box; margin: 8px 0; padding: 10px; border-radius: 8px; background: #151a28; color: #cfe3ff; font: 12px/1.35 ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; border: 0; }
+  pre { max-height: 45vh; overflow: auto; }
+  textarea { height: 40vh; }
+  #bar { height: 6px; border-radius: 3px; background: #3a4260; overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; background: #4d7cff; transition: width .3s; }
+</style>
+</head>
+<body>
+<h1>Poku: замер сети</h1>
+<p>Откройте страницу с телефона так, как играете (LTE, VPN как обычно). Не сворачивайте и не блокируйте экран, замер идёт около 2 минут.</p>
+<input id="label" type="text" placeholder="Метка: например «iPhone LTE, VPN вкл»">
+<button id="go">Начать замер</button>
+<div id="bar"><i></i></div>
+<pre id="log"></pre>
+<textarea id="report" readonly hidden></textarea>
+<button id="copy" hidden>Скопировать отчёт</button>
+
+<script>
+'use strict';
+// Network probe for Poku. Measures, from the player's own device and network path:
+//  1. the VPN/ISP exit (ipinfo, Cloudflare trace),
+//  2. HTTPS round trips to a few CDNs (warm connection = the pure TCP path),
+//  3. WebSocket echo round trips to public echo servers (what a WebSocket game server would give),
+//  4. WebRTC data channel through the TURN relay from ice.json, relay-only, idle and under game-like load.
+// Nothing is sent anywhere except to those public endpoints; the result is only shown on screen.
+
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+const report = [];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + ' timeout')), ms))]);
+
+function log(s) { logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+function line(s) { report.push(s); log(s); }
+function progress(f) { document.querySelector('#bar i').style.width = Math.round(f * 100) + '%'; }
+
+function stats(a) {
+  if (!a.length) return null;
+  const s = [...a].sort((x, y) => x - y);
+  const q = p => s[Math.min(s.length - 1, Math.floor(s.length * p))];
+  return { n: s.length, min: s[0], p50: q(0.5), p95: q(0.95), max: s[s.length - 1] };
+}
+function fmt(st) {
+  return st ? `min ${st.min.toFixed(0)} p50 ${st.p50.toFixed(0)} p95 ${st.p95.toFixed(0)} max ${st.max.toFixed(0)} ms (n=${st.n})` : 'no samples';
+}
+
+// Frame timing: a slow phone delays the handling of pings, so it is part of the picture.
+const frames = [];
+(function raf(t) { frames.push(t); requestAnimationFrame(raf); })(performance.now());
+function frameInfo(t0, t1) {
+  const d = [];
+  for (let i = 1; i < frames.length; i++) if (frames[i] >= t0 && frames[i] <= t1) d.push(frames[i] - frames[i - 1]);
+  const st = stats(d);
+  if (!st) return 'frames: none (page hidden?)';
+  const mean = d.reduce((a, b) => a + b, 0) / d.length;
+  return `frames: ${(1000 / mean).toFixed(0)} fps, frame p95 ${st.p95.toFixed(0)} max ${st.max.toFixed(0)} ms`;
+}
+
+async function ipStep() {
+  try {
+    const j = await (await withTimeout(fetch('https://ipinfo.io/json', { cache: 'no-store' }), 7000, 'ipinfo')).json();
+    line(`exit: ${j.ip} ${j.city || ''} ${j.country || ''} ${j.org || ''}`);
+  } catch (e) { line('exit: ipinfo failed (' + e.message + ')'); }
+  try {
+    const t = await (await withTimeout(fetch('https://www.cloudflare.com/cdn-cgi/trace', { cache: 'no-store' }), 7000, 'trace')).text();
+    const get = k => (t.match(new RegExp('^' + k + '=(.*)$', 'm')) || [])[1];
+    line(`cloudflare edge: colo ${get('colo')} (loc ${get('loc')})`);
+  } catch (e) { line('cloudflare edge: not readable (' + e.message + ')'); }
+}
+
+async function httpsRtt(label, url) {
+  const warm = []; let cold = null;
+  for (let i = 0; i < 13; i++) {
+    const u = url + (url.includes('?') ? '&' : '?') + 'r=' + Math.random().toString(36).slice(2);
+    const t0 = performance.now();
+    try { await withTimeout(fetch(u, { mode: 'no-cors', cache: 'no-store' }), 6000, 'fetch'); }
+    catch (e) { if (i === 0) { line(`https ${label}: failed (${e.message})`); return; } continue; }
+    const dt = performance.now() - t0;
+    if (i === 0) cold = dt; else warm.push(dt);
+    await sleep(120);
+  }
+  line(`https ${label}: cold ${cold.toFixed(0)} ms; warm ${fmt(stats(warm))}`);
+}
+
+function wsRtt(label, url) {
+  return new Promise(resolve => {
+    const rtts = []; const pending = new Map();
+    let ws, openMs = null, seq = 0, sentCount = 0, timer = null, done = false, served = '';
+    const t0 = performance.now();
+    const finish = note => {
+      if (done) return; done = true;
+      clearInterval(timer); clearTimeout(guard);
+      try { ws.close(); } catch (e) { /* already closed */ }
+      line(`ws ${label}: ${note ? note + '; ' : ''}open ${openMs == null ? 'n/a' : openMs.toFixed(0) + ' ms'}; rtt ${fmt(stats(rtts))}; lost ${sentCount - rtts.length}/${sentCount}${served ? '; ' + served : ''}`);
+      resolve();
+    };
+    let guard = setTimeout(() => finish('open timeout'), 12000);
+    try { ws = new WebSocket(url); } catch (e) { finish('cannot create (' + e.message + ')'); return; }
+    ws.onerror = () => finish('error');
+    ws.onclose = () => finish(openMs == null ? 'closed before open' : '');
+    ws.onopen = () => {
+      openMs = performance.now() - t0;
+      clearTimeout(guard); guard = setTimeout(() => finish('timeout'), 6000);   // the pings need ~4.2 s after open
+      timer = setInterval(() => {
+        if (sentCount >= 30) { clearInterval(timer); setTimeout(() => finish(''), 1200); return; }
+        const id = seq++; sentCount++; pending.set(id, performance.now());
+        try { ws.send('p' + id); } catch (e) { /* closing */ }
+      }, 100);
+    };
+    ws.onmessage = m => {
+      const s = typeof m.data === 'string' ? m.data : '';
+      if (s.startsWith('Request served by')) { served = s.trim(); return; }
+      if (s[0] !== 'p') return;
+      const id = parseInt(s.slice(1), 10), p = pending.get(id);
+      if (p != null) { pending.delete(id); rtts.push(performance.now() - p); }
+    };
+  });
+}
+
+// Two peer connections in this page, both relay-only through the same TURN: a ping goes
+// A -> TURN -> B and back, so the round trip is two device<->TURN round trips.
+async function turnTest(label, urls, cred) {
+  const cfg = { iceServers: [{ urls, username: cred.username, credential: cred.credential }], iceTransportPolicy: 'relay' };
+  const pa = new RTCPeerConnection(cfg), pb = new RTCPeerConnection(cfg);
+  const errs = [];
+  pa.onicecandidateerror = e => errs.push(`${e.errorCode} ${e.errorText || ''} ${e.url || ''}`.trim());
+  pa.onicecandidate = e => { if (e.candidate) pb.addIceCandidate(e.candidate).catch(() => {}); };
+  pb.onicecandidate = e => { if (e.candidate) pa.addIceCandidate(e.candidate).catch(() => {}); };
+
+  const res = { idle: { sent: 0, rtt: [] }, low: { sent: 0, rtt: [] }, load: { sent: 0, rtt: [] } };
+  const pend = new Map(); let pingSeq = 0, chB = null;
+  const dc = pa.createDataChannel('t', { ordered: false, maxRetransmits: 0 });
+  dc.binaryType = 'arraybuffer';
+  pb.ondatachannel = e => {
+    chB = e.channel; chB.binaryType = 'arraybuffer';
+    chB.onmessage = m => { if (new Uint8Array(m.data)[0] === 1) chB.send(m.data); };
+  };
+  dc.onmessage = m => {
+    const v = new DataView(m.data);
+    if (v.getUint8(0) !== 1) return;
+    const p = pend.get(v.getUint32(1));
+    if (p) { pend.delete(v.getUint32(1)); res[p.ph].rtt.push(performance.now() - p.t0); }
+  };
+  const opened = new Promise(r => { dc.onopen = r; });
+  await pa.setLocalDescription(await pa.createOffer());
+  await pb.setRemoteDescription(pa.localDescription);
+  await pb.setLocalDescription(await pb.createAnswer());
+  await pa.setRemoteDescription(pb.localDescription);
+  const tc = performance.now();
+  try { await withTimeout(opened, 15000, 'connect'); }
+  catch (e) {
+    line(`turn ${label}: no connection in 15 s (ice ${pa.iceConnectionState}); errors: ${errs.slice(0, 3).join(' | ') || 'none'}`);
+    pa.close(); pb.close(); return;
+  }
+  for (let i = 0; i < 40 && !chB; i++) await sleep(50);
+  const connMs = performance.now() - tc;
+
+  const sendPing = ph => {
+    const b = new ArrayBuffer(16), v = new DataView(b), id = pingSeq++;
+    v.setUint8(0, 1); v.setUint32(1, id);
+    pend.set(id, { t0: performance.now(), ph }); res[ph].sent++;
+    try { dc.send(b); } catch (e) { /* channel closing */ }
+  };
+  const loadBuf = new ArrayBuffer(400); new DataView(loadBuf).setUint8(0, 2);
+  // Both peers live on this device, so the device sends and receives the sum of both channels:
+  // a 400-byte packet every `every` ms on each channel = 800 / every KB/s up and the same down.
+  const phase = async (ph, ms, every) => {
+    const f0 = performance.now();
+    const pt = setInterval(() => sendPing(ph), 50);   // 20 pings/s
+    const lt = every ? setInterval(() => {
+      try { dc.send(loadBuf); } catch (e) { /* closing */ }
+      try { chB.send(loadBuf); } catch (e) { /* closing */ }
+    }, every) : null;
+    await sleep(ms); clearInterval(pt); if (lt) clearInterval(lt);
+    await sleep(1500);
+    const r = res[ph], st = stats(r.rtt);
+    line(`  ${ph}${every ? ` (${(800 / every).toFixed(0)} KB/s each way)` : ''}: rtt A-TURN-B-TURN-A ${fmt(st)}${st ? ` => device<->TURN ~${(st.p50 / 2).toFixed(0)} ms` : ''}; lost ${r.sent - r.rtt.length}/${r.sent}; ${frameInfo(f0, f0 + ms)}`);
+  };
+
+  let info = '';
+  try {
+    const stt = await pa.getStats(); const byId = {}; let pair = null;
+    stt.forEach(s => { byId[s.id] = s; });
+    stt.forEach(s => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = byId[s.selectedCandidatePairId]; });
+    if (!pair) stt.forEach(s => { if (s.type === 'candidate-pair' && (s.nominated || s.selected) && s.state === 'succeeded') pair = s; });
+    if (pair) {
+      const lc = byId[pair.localCandidateId] || {}, rc = byId[pair.remoteCandidateId] || {};
+      info = `local ${lc.candidateType}/${lc.protocol} relayProto ${lc.relayProtocol || '?'} relay-addr ${lc.address || lc.ip || '?'} url ${lc.url || '?'}; remote ${rc.candidateType} ${rc.address || rc.ip || '?'}`;
+    }
+  } catch (e) { info = 'stats failed: ' + e.message; }
+  line(`turn ${label}: connected in ${connMs.toFixed(0)} ms; ${info}`);
+  await phase('idle', 8000, 0);
+  await phase('low', 8000, 64);     // 12 KB/s each way
+  await phase('load', 12000, 32);   // 25 KB/s each way, about what a 6-player client moves
+  pa.close(); pb.close();
+}
+
+async function run() {
+  $('go').disabled = true; $('report').hidden = true; $('copy').hidden = true;
+  logEl.textContent = ''; report.length = 0; progress(0);
+  const t0 = performance.now();
+  const conn = navigator.connection || {};
+  line(`Poku net probe, ${new Date().toISOString()}`);
+  line(`label: ${$('label').value || '(none)'}`);
+  line(`ua: ${navigator.userAgent}`);
+  line(`navigator.connection: ${conn.effectiveType || 'n/a'} rtt ${conn.rtt ?? 'n/a'} downlink ${conn.downlink ?? 'n/a'}`);
+  await ipStep(); progress(0.08);
+
+  const https = [['cloudflare', 'https://www.cloudflare.com/cdn-cgi/trace'], ['github-pages', 'ping.txt'], ['jsdelivr', 'https://cdn.jsdelivr.net/npm/jquery@3/package.json'], ['google', 'https://www.google.com/generate_204']];
+  for (let i = 0; i < https.length; i++) { await httpsRtt(https[i][0], https[i][1]); progress(0.08 + 0.17 * (i + 1) / https.length); }
+
+  const wss = [['echo.websocket.org', 'wss://echo.websocket.org'], ['postman-echo', 'wss://ws.postman-echo.com/raw']];
+  for (let i = 0; i < wss.length; i++) { await wsRtt(wss[i][0], wss[i][1]); progress(0.25 + 0.15 * (i + 1) / wss.length); }
+
+  let ice = null;
+  try { ice = await (await withTimeout(fetch('ice.json', { cache: 'no-store' }), 7000, 'ice.json')).json(); } catch (e) { line('ice.json: ' + e.message); }
+  const turn = ice && ice.turn && ice.turn[0];
+  if (turn && typeof RTCPeerConnection === 'function') {
+    const all = [].concat(turn.urls);
+    const udp = all.filter(u => /^turn:/.test(u) && !/transport=tcp/.test(u));
+    const tls = all.filter(u => /^turns:/.test(u));
+    if (udp.length) { await turnTest('UDP', udp.slice(0, 1), turn); progress(0.7); }
+    if (tls.length) { await turnTest('TLS-TCP', tls.slice(0, 1), turn); progress(0.97); }
+  } else line('turn: skipped (no ice.json turn entry or no WebRTC)');
+
+  line(`total ${((performance.now() - t0) / 1000).toFixed(0)} s; ${frameInfo(t0, performance.now())}`);
+  progress(1);
+  $('report').value = report.join('\n'); $('report').hidden = false; $('copy').hidden = false;
+  $('go').disabled = false; $('go').textContent = 'Повторить замер';
+}
+
+$('go').onclick = () => { run().catch(e => { line('probe crashed: ' + e.message); $('go').disabled = false; }); };
+$('copy').onclick = async () => {
+  const ta = $('report');
+  try { await navigator.clipboard.writeText(ta.value); $('copy').textContent = 'Скопировано'; }
+  catch (e) { ta.focus(); ta.select(); $('copy').textContent = 'Выделено: нажмите «Копировать» в меню'; }
+};
+</script>
+</body>
+</html>
