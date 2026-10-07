@@ -21,7 +21,7 @@
 </head>
 <body>
 <h1>Poku: замер сети</h1>
-<p>Откройте страницу с телефона так, как играете (LTE, VPN как обычно). Не сворачивайте и не блокируйте экран, замер идёт около 2 минут.</p>
+<p>Откройте страницу с телефона так, как играете (LTE, VPN как обычно). Не сворачивайте и не блокируйте экран, замер идёт около 2,5 минут.</p>
 <input id="label" type="text" placeholder="Метка: например «iPhone LTE, VPN вкл»">
 <button id="go">Начать замер</button>
 <div id="bar"><i></i></div>
@@ -133,7 +133,48 @@ function wsRtt(label, url) {
 
 // Two peer connections in this page, both relay-only through the same TURN: a ping goes
 // A -> TURN -> B and back, so the round trip is two device<->TURN round trips.
-async function turnTest(label, urls, cred) {
+// One WebSocket to an echo server, game-shaped traffic: `pps` messages/s of `size` bytes (each is echoed back, so the same rate comes down).
+// Every message carries a sequence number and is timed, so rtt and loss are measured on the load itself.
+function wsLoad(label, url, plan) {
+  return new Promise(resolve => {
+    let ws, done = false, seq = 0;
+    const pend = new Map(); const out = [];   // out: { name, pps, size, sent, rtt[] }
+    let cur = null;
+    const t0 = performance.now();
+    const finish = note => {
+      if (done) return; done = true; clearTimeout(guard);
+      try { ws.close(); } catch (e) { /* already closed */ }
+      if (note) line(`wsload ${label}: ${note}`);
+      for (const o of out) line(`  wsload ${label} ${o.name} (${o.pps} msg/s x ${o.size} B each way): rtt ${fmt(stats(o.rtt))}; lost ${o.sent - o.rtt.length}/${o.sent}`);
+      resolve();
+    };
+    const guard = setTimeout(() => finish('timeout'), 90000);
+    try { ws = new WebSocket(url); } catch (e) { finish('cannot create (' + e.message + ')'); return; }
+    ws.onerror = () => finish('error');
+    ws.onclose = () => finish('closed early');
+    ws.onmessage = m => {
+      const s = typeof m.data === 'string' ? m.data : '';
+      if (s[0] !== 'p') return;
+      const id = parseInt(s.slice(1), 10), p = pend.get(id);
+      if (p) { pend.delete(id); p.o.rtt.push(performance.now() - p.t0); }
+    };
+    ws.onopen = async () => {
+      for (const [name, ms, pps, size] of plan) {
+        cur = { name, pps, size, sent: 0, rtt: [] }; out.push(cur);
+        const pad = 'x'.repeat(Math.max(0, size - 8));
+        const timer = setInterval(() => {
+          const id = seq++; cur.sent++; pend.set(id, { t0: performance.now(), o: cur });
+          try { ws.send('p' + id + ' ' + pad); } catch (e) { /* closing */ }
+        }, 1000 / pps);
+        await sleep(ms); clearInterval(timer); await sleep(1500);
+      }
+      finish('');
+    };
+  });
+}
+
+// plan: [[phase name, ms, packets/s each way, bytes per packet], ...]
+async function turnTest(label, urls, cred, plan) {
   const cfg = { iceServers: [{ urls, username: cred.username, credential: cred.credential }], iceTransportPolicy: 'relay' };
   const pa = new RTCPeerConnection(cfg), pb = new RTCPeerConnection(cfg);
   const errs = [];
@@ -141,7 +182,7 @@ async function turnTest(label, urls, cred) {
   pa.onicecandidate = e => { if (e.candidate) pb.addIceCandidate(e.candidate).catch(() => {}); };
   pb.onicecandidate = e => { if (e.candidate) pa.addIceCandidate(e.candidate).catch(() => {}); };
 
-  const res = { idle: { sent: 0, rtt: [] }, low: { sent: 0, rtt: [] }, load: { sent: 0, rtt: [] } };
+  const res = {};   // phase name -> { sent, rtt[] }
   const pend = new Map(); let pingSeq = 0, chB = null;
   const dc = pa.createDataChannel('t', { ordered: false, maxRetransmits: 0 });
   dc.binaryType = 'arraybuffer';
@@ -175,20 +216,22 @@ async function turnTest(label, urls, cred) {
     pend.set(id, { t0: performance.now(), ph }); res[ph].sent++;
     try { dc.send(b); } catch (e) { /* channel closing */ }
   };
-  const loadBuf = new ArrayBuffer(400); new DataView(loadBuf).setUint8(0, 2);
   // Both peers live on this device, so the device sends and receives the sum of both channels:
-  // a 400-byte packet every `every` ms on each channel = 800 / every KB/s up and the same down.
-  const phase = async (ph, ms, every) => {
+  // `pps` packets/s of `size` bytes each way at the device = pps/2 on each channel.
+  // Real traffic: an Input packet is 69 bytes, one per tick (60/s) per peer pair in a 2-player match.
+  const phase = async (ph, ms, pps, size) => {
     const f0 = performance.now();
-    const pt = setInterval(() => sendPing(ph), 50);   // 20 pings/s
-    const lt = every ? setInterval(() => {
-      try { dc.send(loadBuf); } catch (e) { /* closing */ }
-      try { chB.send(loadBuf); } catch (e) { /* closing */ }
-    }, every) : null;
+    res[ph] = { sent: 0, rtt: [] };
+    const buf = new ArrayBuffer(size || 16); new DataView(buf).setUint8(0, 2);
+    const pt = setInterval(() => sendPing(ph), 50);   // 20 pings/s (small, on top of the load)
+    const lt = pps ? setInterval(() => {
+      try { dc.send(buf); } catch (e) { /* closing */ }
+      try { chB.send(buf); } catch (e) { /* closing */ }
+    }, 2000 / pps) : null;
     await sleep(ms); clearInterval(pt); if (lt) clearInterval(lt);
     await sleep(1500);
     const r = res[ph], st = stats(r.rtt);
-    line(`  ${ph}${every ? ` (${(800 / every).toFixed(0)} KB/s each way)` : ''}: rtt A-TURN-B-TURN-A ${fmt(st)}${st ? ` => device<->TURN ~${(st.p50 / 2).toFixed(0)} ms` : ''}; lost ${r.sent - r.rtt.length}/${r.sent}; ${frameInfo(f0, f0 + ms)}`);
+    line(`  ${ph}${pps ? ` (${pps} pkt/s x ${size} B each way = ${(pps * (size + 60) / 1000).toFixed(0)} KB/s on the wire)` : ''}: rtt A-TURN-B-TURN-A ${fmt(st)}${st ? ` => device<->TURN ~${(st.p50 / 2).toFixed(0)} ms` : ''}; lost ${r.sent - r.rtt.length}/${r.sent}; ${frameInfo(f0, f0 + ms)}`);
   };
 
   let info = '';
@@ -203,9 +246,7 @@ async function turnTest(label, urls, cred) {
     }
   } catch (e) { info = 'stats failed: ' + e.message; }
   line(`turn ${label}: connected in ${connMs.toFixed(0)} ms; ${info}`);
-  await phase('idle', 8000, 0);
-  await phase('low', 8000, 64);     // 12 KB/s each way
-  await phase('load', 12000, 32);   // 25 KB/s each way, about what a 6-player client moves
+  for (const p of plan) await phase(p[0], p[1], p[2], p[3]);
   pa.close(); pb.close();
 }
 
@@ -214,7 +255,7 @@ async function run() {
   logEl.textContent = ''; report.length = 0; progress(0);
   const t0 = performance.now();
   const conn = navigator.connection || {};
-  line(`Poku net probe, ${new Date().toISOString()}`);
+  line(`Poku net probe v2, ${new Date().toISOString()}`);
   line(`label: ${$('label').value || '(none)'}`);
   line(`ua: ${navigator.userAgent}`);
   line(`navigator.connection: ${conn.effectiveType || 'n/a'} rtt ${conn.rtt ?? 'n/a'} downlink ${conn.downlink ?? 'n/a'}`);
@@ -224,7 +265,10 @@ async function run() {
   for (let i = 0; i < https.length; i++) { await httpsRtt(https[i][0], https[i][1]); progress(0.08 + 0.17 * (i + 1) / https.length); }
 
   const wss = [['echo.websocket.org', 'wss://echo.websocket.org'], ['postman-echo', 'wss://ws.postman-echo.com/raw']];
-  for (let i = 0; i < wss.length; i++) { await wsRtt(wss[i][0], wss[i][1]); progress(0.25 + 0.15 * (i + 1) / wss.length); }
+  for (let i = 0; i < wss.length; i++) { await wsRtt(wss[i][0], wss[i][1]); progress(0.2 + 0.07 * (i + 1) / wss.length); }
+  // game-shaped traffic over WebSocket: 69-byte messages like an Input packet, 30/60/120 per second
+  await wsLoad('echo.websocket.org', 'wss://echo.websocket.org', [['g30', 6000, 30, 69], ['g60', 6000, 60, 69], ['g120', 6000, 120, 69]]);
+  progress(0.4);
 
   let ice = null;
   try { ice = await (await withTimeout(fetch('ice.json', { cache: 'no-store' }), 7000, 'ice.json')).json(); } catch (e) { line('ice.json: ' + e.message); }
@@ -233,8 +277,11 @@ async function run() {
     const all = [].concat(turn.urls);
     const udp = all.filter(u => /^turn:/.test(u) && !/transport=tcp/.test(u));
     const tls = all.filter(u => /^turns:/.test(u));
-    if (udp.length) { await turnTest('UDP', udp.slice(0, 1), turn); progress(0.7); }
-    if (tls.length) { await turnTest('TLS-TCP', tls.slice(0, 1), turn); progress(0.97); }
+    // 69 B = one Input packet; 60 pkt/s = a 2-player match, 120 = 3 players, 30 = half rate (every 2nd tick)
+    const udpPlan = [['idle', 6000, 0, 0], ['g30', 6000, 30, 69], ['g60', 6000, 60, 69], ['g120', 6000, 120, 69], ['bulk', 8000, 62, 400]];
+    const tlsPlan = [['idle', 6000, 0, 0], ['g60', 6000, 60, 69], ['bulk', 8000, 62, 400]];
+    if (udp.length) { await turnTest('UDP', udp.slice(0, 1), turn, udpPlan); progress(0.75); }
+    if (tls.length) { await turnTest('TLS-TCP', tls.slice(0, 1), turn, tlsPlan); progress(0.97); }
   } else line('turn: skipped (no ice.json turn entry or no WebRTC)');
 
   line(`total ${((performance.now() - t0) / 1000).toFixed(0)} s; ${frameInfo(t0, performance.now())}`);
