@@ -5,7 +5,7 @@
 //   * the page itself (play/ with any query) and ice.json: network first, the cached copy only when the network fails (offline start)
 //   * everything else (other origins, non-GET): not touched
 // GitHub Pages sends max-age=600 for all of it, so without this a start after ten minutes asks the server about each of ~25 files again (a 304 each when all is well).
-const BUILD = 'poku-dd5cff3';
+const BUILD = 'poku-f77a8de';
 const CACHE = 'poku-' + BUILD;
 
 self.addEventListener('install', () => { self.skipWaiting(); });
