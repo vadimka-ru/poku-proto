@@ -9,7 +9,7 @@ window.__simError = "";
 (async function () {
   try {
     const t0 = performance.now();
-    const { dotnet } = await import("./poku-d7dc5e2-bridge/_framework/dotnet.js");
+    const { dotnet } = await import("./poku-dd5cff3-bridge/_framework/dotnet.js");
     const early = window.__pokuEarly || {};
     const runtime = await dotnet.withDiagnosticTracing(false)
       .withResourceLoader(function (type, name) {
