@@ -30,7 +30,7 @@
     var dpr = mode === 'viewport'
       ? Math.max(BASE_W / Math.max(window.innerWidth, 1), BASE_H / Math.max(window.innerHeight, 1))
       : native * factor;
-    return Math.min(native, Math.max(dpr, 0.25));
+    return Math.min(native, Math.max(dpr * (window.__pokuBenchScale || 1), 0.25));       // __pokuBenchScale: PerfBench (?selfbench=1) renders the match at a fraction of the pixels
   }
   Object.defineProperty(window, 'devicePixelRatio', { configurable: true, get: effective });
   // floor(floor(w * s) / s) can be a pixel short at a fractional ratio: keep the canvas covering the whole window
