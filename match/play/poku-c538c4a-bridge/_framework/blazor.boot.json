@@ -1,0 +1,37 @@
+{
+  "mainAssemblyName": "BridgeWasm",
+  "resources": {
+    "hash": "sha256-B8iyu1e9SsVGrBbfN7BPsE6oN+1njltWM2JFsLNA1V8=",
+    "jsModuleNative": {
+      "dotnet.native.8.0.31.rbm102v8ef.js": "sha256-yA3B9P6Kk9VJfwKf+tPWFOPDKwl++oY4jXNE/e/FwcU="
+    },
+    "jsModuleRuntime": {
+      "dotnet.runtime.8.0.31.jiuo79exzt.js": "sha256-qzVt86q0GKgDNek5+WFBz2hU8jGxI86YJeZmNGXj/qM="
+    },
+    "wasmNative": {
+      "dotnet.native.wasm": "sha256-AOuPzCkJzhHrP4uRSGo7RATFT5nB3Mr2fIdC8fCyUuc="
+    },
+    "assembly": {
+      "Bridge.wasm": "sha256-j/99toVg+tuDcm4Wf4xDihGyqN2R8uC6gvz1I/BLRvU=",
+      "BridgeWasm.wasm": "sha256-YAfU3lzDtXoyrMqXu3bVi8N4HS6F+8XzHUCEqGSdEds=",
+      "Progress.wasm": "sha256-uw2lpmEG+s3y86lb40kjVJ/qWeoX2tZO7Uv99Zwo+tg=",
+      "Sim.wasm": "sha256-E8S2E7GkuKwm+B7BksrHZfSF9ZPZBn4IesL6bNPpVc8=",
+      "System.Collections.Concurrent.wasm": "sha256-wPt/dwuKZW36Hbh3BtQE9NFN4o9NSx7pO6UxzTA1OjU=",
+      "System.Collections.wasm": "sha256-RP8i7xZDL4LsSR/zSCCUdpAnJrmZii9cuRaeUc5CGfc=",
+      "System.Linq.wasm": "sha256-obSNJoLFjtWIwakaNuQKtzReCwc5h6CvjMIaoQygvH4=",
+      "System.Memory.wasm": "sha256-D0Xe+3CujYcsFJulIbSWae/YhBejzX54P3MqyY57bR0=",
+      "System.Private.CoreLib.wasm": "sha256-PDHDGIIXdjiU4uolWlyOGPhOMT5Y5ECFG/zwZvWLEAg=",
+      "System.Private.Uri.wasm": "sha256-qi+AB0ALIv271XAETs5S7YVLLzlHwIi1i4YNHyufbiY=",
+      "System.Runtime.InteropServices.JavaScript.wasm": "sha256-bECJC+EhGzqcFfP3QRvdD6PgnSKuSA7nvxKbUq8Fq5c=",
+      "System.Runtime.Numerics.wasm": "sha256-/utI5gaA15eUzY4B5DuC0ZljIn1QzOO4yVDNiQAKSxc=",
+      "System.Runtime.wasm": "sha256-YznOpTA2tD9Ij743JjmFrL0cOHoe84D0KIGq12UiClg=",
+      "System.Text.Encodings.Web.wasm": "sha256-4hfsnrpLvKOCMTC9Ub+BkwXmM1L0nOY/a6JiZZ0gew8=",
+      "System.Text.Json.wasm": "sha256-Q5o3nsXtRSY0SpPp++GAA06wAUvuwO55dBTR9aa/ces=",
+      "System.Text.RegularExpressions.wasm": "sha256-87+19YSfPo/n9YawwrMW6I2hdSDtnJ39CbDtJUGwYl0="
+    }
+  },
+  "cacheBootResources": true,
+  "debugLevel": 0,
+  "linkerEnabled": true,
+  "globalizationMode": "invariant"
+}
