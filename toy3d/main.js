@@ -146,7 +146,7 @@ const CREAM = 0xfff1d6, TEAL = 0x35c7b4, PINK = 0xff7aa8, SKYB = 0x6bb8ff, MINT 
 // mirrored cover: left/right + centre
 const cover = [
   [-6, 0, 3, 1.4, 1.4, TEAL], [6, 0, 3, 1.4, 1.4, TEAL],
-  [0, -3, 2, 2, 1.0, CREAM], [0, 3, 2, 2, 1.0, CREAM],
+  [0, -6, 2, 1.6, 1.0, CREAM], [0, 6, 2, 1.6, 1.0, CREAM],
   [-7, 7, 1.4, 4, 1.2, PINK], [7, -7, 1.4, 4, 1.2, PINK],
   [7, 7, 1.4, 4, 1.2, SKYB], [-7, -7, 1.4, 4, 1.2, SKYB],
   [0, 10, 5, 1.1, 1.0, MINT], [0, -10, 5, 1.1, 1.0, MINT],
@@ -182,6 +182,39 @@ function base(z, team) {
   solids.push({ x: 0, z, hx: 2.2, hz: 1.6 });
 }
 base(L / 2 - 3.2, 0); base(-L / 2 + 3.2, 1);
+
+
+// ---------- control point: tug-of-war bar, same rules as the 2D fight ----------
+// bar -1..1 (+1 = we hold it fully); standing alone on it moves the bar your way, both on it = contested (frozen), full bar = round won, two rounds win the bout
+const PT = { x: 0, z: 0, r: 2.6 }, BAR_SECONDS = 9;
+let bar = 0; const score = [0, 0]; let banner = '', bannerT = 0;
+const ptC = document.createElement('canvas'); ptC.width = ptC.height = 512;
+const ptX = ptC.getContext('2d'), ptTex = new THREE.CanvasTexture(ptC); ptTex.colorSpace = THREE.SRGBColorSpace; ptTex.anisotropy = 8;
+const ptMesh = new THREE.Mesh(new THREE.PlaneGeometry(PT.r * 2.5, PT.r * 2.5).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: ptTex, transparent: true, depthWrite: false }));
+ptMesh.position.set(PT.x, 0.02, PT.z); scene.add(ptMesh);
+const ptLight = new THREE.PointLight(0xffdca0, 14, 12, 2); ptLight.position.set(PT.x, 2.2, PT.z); scene.add(ptLight);
+let ptKey = '';
+function drawPoint(contested, t) {
+  const k = `${(bar * 100) | 0}|${contested}|${contested ? ((t * 8) | 0) % 2 : 0}`;
+  if (k === ptKey) return; ptKey = k;
+  const c = 256, R = c / 1.25, ctx = ptX; ctx.clearRect(0, 0, 512, 512);
+  ctx.lineWidth = 22;
+  ctx.strokeStyle = contested && (((t * 8) | 0) % 2) ? '#ff6b6b' : '#fff7e0'; ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.arc(c, c, R, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  if (Math.abs(bar) > 0.005) {
+    ctx.strokeStyle = bar > 0 ? TEAM_CSS[0] : TEAM_CSS[1]; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(c, c, R, -Math.PI / 2, -Math.PI / 2 + Math.abs(bar) * Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 0.16 * Math.abs(bar) + 0.05; ctx.fillStyle = bar > 0 ? TEAM_CSS[0] : TEAM_CSS[1]; ctx.beginPath(); ctx.arc(c, c, R - 16, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#fff7e0'; ctx.beginPath(); ctx.moveTo(c, c - 26); ctx.lineTo(c + 18, c); ctx.lineTo(c, c + 26); ctx.lineTo(c - 18, c); ctx.closePath(); ctx.fill();
+  ptTex.needsUpdate = true;
+}
+function onPoint(p) { return Math.hypot(p.x - PT.x, p.z - PT.z) < PT.r; }
+function endRound(w) {
+  score[w]++; bar = 0; banner = score[w] >= 2 ? (w === 0 ? 'YOU WIN THE BOUT' : 'THEY WIN THE BOUT') : (w === 0 ? 'ROUND TO YOU' : 'ROUND TO THEM'); bannerT = 2.5;
+  if (score[w] >= 2) score[0] = score[1] = 0;
+  heroRoot.position.set(0, 0, 11); enemyRoot.position.set(0, 0, -11);
+}
 
 // ---------- heroes: Poku built from rounded primitives (cream cat, pink ear tips, blue-violet shirt, orange pack) ----------
 const heroRoot = new THREE.Group(); scene.add(heroRoot);
@@ -332,6 +365,7 @@ function buildComposer() {
 if (FX) buildComposer();
 
 addEventListener('resize', () => {
+  if (!innerWidth || !innerHeight) return;
   renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   if (composer) composer.setSize(innerWidth, innerHeight);
 });
@@ -366,15 +400,28 @@ function frame() {
 
   // bot
   bot.t -= dt; bot.shootT -= dt;
-  if (bot.t <= 0) { bot.t = rnd(0.8, 2); const a = Math.random() * 6.283; bot.dir.set(Math.cos(a), 0, Math.sin(a)); }
+  if (bot.t <= 0) {
+    bot.t = rnd(0.6, 1.4);
+    if (!onPoint(enemyRoot.position) || Math.random() < 0.3) bot.dir.set(PT.x - enemyRoot.position.x, 0, PT.z - enemyRoot.position.z).normalize();
+    else { const a = Math.random() * 6.283; bot.dir.set(Math.cos(a), 0, Math.sin(a)).multiplyScalar(0.35); }
+  }
   enemyRoot.position.addScaledVector(bot.dir, 4.2 * dt); resolve(enemyRoot.position, 0.5);
-  if (enemyRoot.position.z > 2) bot.dir.z = -Math.abs(bot.dir.z);
   if (bot.shootT <= 0) {
     bot.shootT = 0.14;
-    const tgt = new THREE.Vector3(enemyRoot.position.x + rnd(-6, 6), 0, enemyRoot.position.z + rnd(1, 8));
+    const tgt = (Math.random() < 0.5 ? heroRoot.position.clone() : new THREE.Vector3(enemyRoot.position.x + rnd(-6, 6), 0, enemyRoot.position.z + rnd(1, 8))).add(new THREE.Vector3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5)));
     shoot(enemyRoot.position, tgt, 1, rnd(0.55, 0.95));
     if (catPivot.foe) catPivot.foe.rotation.y = Math.atan2(tgt.x - enemyRoot.position.x, tgt.z - enemyRoot.position.z);
   }
+
+  // control point
+  const me = onPoint(heroRoot.position), foe = onPoint(enemyRoot.position), contested = me && foe;
+  if (bannerT <= 0) {
+    if (me && !foe) bar = Math.min(1, bar + dt / BAR_SECONDS); else if (foe && !me) bar = Math.max(-1, bar - dt / BAR_SECONDS);
+    if (bar >= 1) endRound(0); else if (bar <= -1) endRound(1);
+  }
+  drawPoint(contested, t);
+  ptLight.color.setHex(bar > 0.02 ? TEAM[0] : bar < -0.02 ? TEAM[1] : 0xffdca0);
+  bannerT -= dt;
 
   // shots
   for (let i = shots.length - 1; i >= 0; i--) {
@@ -399,9 +446,9 @@ function frame() {
   dts.push(dt); if (dts.length > 300) dts.shift();
   frames++; fpsT += dt;
   if (fpsT > 0.5) { const avg = dts.reduce((a, b) => a + b, 0) / dts.length, worst = Math.max(...dts);
-    hud.innerHTML = `<b style="font-size:18px">${(1 / avg) | 0} fps</b> (worst frame ${(worst * 1000) | 0} ms) · ${innerWidth}x${innerHeight} @${renderer.getPixelRatio()}x · fx ${FX ? (AO ? 'ao+bloom' : 'bloom') : 'off'}<br>WASD/mouse · touch: left stick, right = aim+fire`; frames = 0; fpsT = 0; }
+    hud.innerHTML = `<div style="font:700 22px system-ui">${score[0]} : ${score[1]}${bannerT > 0 ? ' · ' + banner : ''}</div>`+`<b style="font-size:18px">${(1 / avg) | 0} fps</b> (worst frame ${(worst * 1000) | 0} ms) · ${innerWidth}x${innerHeight} @${renderer.getPixelRatio()}x · fx ${FX ? (AO ? 'ao+bloom' : 'bloom') : 'off'}<br>WASD/mouse · touch: left stick, right = aim+fire`; frames = 0; fpsT = 0; }
   requestAnimationFrame(frame);
 }
 frame();
 
-window.__spike = { splat, heroRoot, enemyRoot, camera, scene };
+window.__spike = { get bar() { return bar; }, set bar(v) { bar = v; }, get ptKey() { return ptKey; }, splat, heroRoot, enemyRoot, camera, scene };
