@@ -229,148 +229,168 @@ function ring(team) {
 heroRoot.add(ring(0)); enemyRoot.add(ring(1));
 
 // Voxel look: every body part is one InstancedMesh of small rounded cubes, coloured per voxel (fur jitter = fluff, face painted on the front layer).
-const VOX = 0.09;
-const voxMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true });
+// Fine-voxel cat: parts are voxelised from an inside() test in metres at ~3-4 cm, meshed from exposed faces, with SMOOTHED normals
+// (taken from the local occupancy), so the surface reads round and soft while the silhouette keeps a fine fuzzy stepping.
+const voxMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, vertexColors: true });
 function hash3(i, j, k) { const h = Math.sin(i * 127.1 + j * 311.7 + k * 74.7) * 43758.5453; return h - Math.floor(h); }
-// Surface mesher: only the exposed faces of the voxels, no gaps, no bevels, flat faces with a stepped silhouette (like a pixel sprite pulled into 3D).
-// dim [nx,ny,nz]; inside(i,j,k) in index space; color(i,j,k,ctx) -> hex (ctx.front = this is a +z face, etc.); anchor = index that sits at the origin
-const FACES = [ // dir, normal, 4 corners (unit cube offsets)
-  [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]]],
-  [[-1, 0, 0], [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]]],
-  [[0, 1, 0], [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]]],
-  [[0, -1, 0], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]]],
-  [[0, 0, 1], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]],
-  [[0, 0, -1], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]],
+const FACES = [
+  [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]]], [[-1, 0, 0], [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]]],
+  [[0, 1, 0], [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]]], [[0, -1, 0], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]]],
+  [[0, 0, 1], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]], [[0, 0, -1], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]],
 ];
-function voxelPart(dim, inside0, color, anchor, v = VOX) {
-  const [nx, ny, nz] = dim, inside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz && inside0(i, j, k), an = anchor || [(nx - 1) / 2, (ny - 1) / 2, (nz - 1) / 2];
-  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
+// min/max: bounding box in the part's own frame (metres); v: voxel size; inside(x,y,z,i,j,k); color(x,y,z,ctx) -> hex
+function voxelPart(min, max, v, inside, color, smooth = 0.8) {
+  const nx = Math.ceil((max[0] - min[0]) / v), ny = Math.ceil((max[1] - min[1]) / v), nz = Math.ceil((max[2] - min[2]) / v);
+  const occ = new Uint8Array(nx * ny * nz), at = (i, j, k) => (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) ? 0 : occ[(i * ny + j) * nz + k];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++)
+    if (inside(min[0] + (i + 0.5) * v, min[1] + (j + 0.5) * v, min[2] + (k + 0.5) * v, i, j, k)) occ[(i * ny + j) * nz + k] = 1;
+  const R = 3, pos = [], nor = [], col = [], idx = [], c = new THREE.Color(), n = new THREE.Vector3(), fn = new THREE.Vector3();
+  const cache = new Map();
+  const smoothN = (a, b, cc, out) => {                       // direction away from the local mass of occupied cells
+    const key = (a * (ny + 1) + b) * (nz + 1) + cc; const hit = cache.get(key);
+    if (hit) return out.copy(hit);
+    let mx = 0, my = 0, mz = 0;
+    for (let di = -R; di < R; di++) for (let dj = -R; dj < R; dj++) for (let dk = -R; dk < R; dk++)
+      if (at(a + di, b + dj, cc + dk)) { mx += di + 0.5; my += dj + 0.5; mz += dk + 0.5; }
+    out.set(-mx, -my, -mz); if (out.lengthSq() < 1e-6) out.set(0, 0, 0); else out.normalize();
+    cache.set(key, out.clone()); return out;
+  };
   for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
-    if (!inside(i, j, k)) continue;
+    if (!at(i, j, k)) continue;
     for (const [d, quad] of FACES) {
-      if (inside(i + d[0], j + d[1], k + d[2])) continue;
-      const ctx = { front: d[2] === 1, back: d[2] === -1, top: d[1] === 1, side: d[0] !== 0 };
-      c.setHex(color(i - an[0], j - an[1], k - an[2], ctx, i, j, k));
-      const base = pos.length / 3;
-      for (const q of quad) { pos.push((i - an[0] - 0.5 + q[0]) * v, (j - an[1] - 0.5 + q[1]) * v, (k - an[2] - 0.5 + q[2]) * v); nor.push(d[0], d[1], d[2]); col.push(c.r, c.g, c.b); }
+      if (at(i + d[0], j + d[1], k + d[2])) continue;
+      const x = min[0] + (i + 0.5) * v, y = min[1] + (j + 0.5) * v, z = min[2] + (k + 0.5) * v;
+      c.setHex(color(x, y, z, { front: d[2] === 1, back: d[2] === -1, top: d[1] === 1, side: d[0] !== 0 }, i, j, k));
+      const f = 0.975 + hash3(i, j, k) * 0.05; c.multiplyScalar(f);
+      const base = pos.length / 3; fn.set(d[0], d[1], d[2]);
+      for (const q of quad) {
+        pos.push(min[0] + (i + q[0]) * v, min[1] + (j + q[1]) * v, min[2] + (k + q[2]) * v);
+        smoothN(i + q[0], j + q[1], k + q[2], n);
+        n.multiplyScalar(smooth).addScaledVector(fn, 1 - smooth).normalize(); nor.push(n.x, n.y, n.z); col.push(c.r, c.g, c.b);
+      }
       idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  const mesh = new THREE.Mesh(geo, voxMat);
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  return mesh;
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, voxMat); mesh.castShadow = true; mesh.receiveShadow = true; return mesh;
 }
-const FWHITE = 0xffffff, FPINK = 0xf5a0a8, FNOSE = 0xe27d92, FBLACK = 0x15121c, FBROWN = 0x8a5a36, DFBROWN = 0x5e3b22, FGOLD = 0xf0b838;
-const sq = (x, p) => Math.pow(Math.abs(x), p);
-function superEll(a, b, c, p, jitter) { // inside() for a rounded box-ish blob centred in an odd grid
-  return (i, j, k, n) => {
-    const x = (i - (n[0] - 1) / 2) / a, y = (j - (n[1] - 1) / 2) / b, z = (k - (n[2] - 1) / 2) / c;
-    return sq(x, p) + sq(y, p) + sq(z, p) <= 1 + (hash3(i, j, k) - 0.5) * jitter;
-  };
-}
+const FWHITE = 0xffffff, FPINK = 0xf6a3ac, FNOSE = 0xe27d92, FBLACK = 0x14111b, FBROWN = 0x8a5a36, DFBROWN = 0x5e3b22, FGOLD = 0xf0b838;
+const se = (x, y, z, a, b, c, p) => Math.pow(Math.abs(x / a), p) + Math.pow(Math.abs(y / b), p) + Math.pow(Math.abs(z / c), p);   // rounded-box field, <=1 inside
+const rr = (x, y, x0, x1, y0, y1, r) => {                                                                                       // rounded rectangle test
+  if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+  const cx = Math.min(Math.max(x, x0 + r), x1 - r), cy = Math.min(Math.max(y, y0 + r), y1 - r); return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+};
 
 function makePoku(team) {
   const g = new THREE.Group();                  // faces +z, origin on the floor
   const tunic = team === 0 ? 0x5d52b8 : 0x45407a, scarfC = team === 0 ? 0xdb3b3b : 0x8a4dff;
-  const BV = 0.075, HV = 0.0625;                // body voxel, head voxel (finer, the face carries the character)
-  const inb = (n, f) => (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < n[0] && j < n[1] && k < n[2] && f(i, j, k, n);
-
+  const BV = 0.04, HV = 0.032;
   const body = new THREE.Group(); body.position.y = 0.3; g.add(body);   // pivot at the hips
 
-  // torso 9x7x6: tunic, belt with buckle, chest strap
-  const tN = [9, 7, 6];
-  const torso = voxelPart(tN, inb(tN, superEll(4.9, 3.9, 3.3, 4, 0.1)), (x, y, z, c, i, j) => {
-    if (j === 1) return (c.front && Math.abs(x) <= 1) ? FGOLD : DFBROWN;
-    if (c.front && j > 1 && Math.abs((x - 0.9) + (y - 0.4) * 1.0) < 0.9) return FBROWN;
-    return tunic;
-  }, undefined, BV);
-  torso.position.set(0, 0.27, 0); body.add(torso);
+  // torso: tunic, belt + buckle, chest strap
+  const torso = voxelPart([-0.34, -0.28, -0.26], [0.34, 0.28, 0.26], BV,
+    (x, y, z, i, j, k) => se(x, y, z, 0.31, 0.26, 0.23, 3.4) <= 1 + (hash3(i, j, k) - 0.5) * 0.08,
+    (x, y, z, c) => {
+      if (y > -0.17 && y < -0.1) return (c.front && Math.abs(x) < 0.06) ? FGOLD : DFBROWN;
+      if (c.front && y > -0.1 && Math.abs(x + y * 0.8 - 0.05) < 0.05) return FBROWN;
+      return tunic;
+    });
+  torso.position.set(0, 0.26, 0); body.add(torso);
 
-  const bag = voxelPart([4, 4, 3], () => true, (x, y, z, c, i, j) => (j === 3 ? DFBROWN : (c.front && i === 1 && j === 1 ? FGOLD : FBROWN)), undefined, BV);
-  bag.position.set(0.42, 0.12, 0.15); body.add(bag);
+  const bag = voxelPart([-0.11, -0.11, -0.08], [0.11, 0.11, 0.08], BV * 0.8,
+    (x, y, z) => se(x, y, z, 0.1, 0.1, 0.07, 4) <= 1,
+    (x, y, z, c) => (y > 0.05 ? DFBROWN : (c.front && Math.abs(x) < 0.025 && Math.abs(y) < 0.03 ? FGOLD : FBROWN)));
+  bag.position.set(0.4, 0.1, 0.12); body.add(bag);
 
-  const scarf = voxelPart([13, 3, 10], (i, j, k) => { const x = (i - 6) / 6.4, z = (k - 4.5) / 4.9; return x * x + z * z <= 1; }, () => scarfC, undefined, BV);
-  scarf.position.set(0, 0.52, 0); body.add(scarf);
-  const capeG = new THREE.Group(); capeG.position.set(0, 0.56, -0.29); body.add(capeG);
-  const cape = voxelPart([10, 10, 2], (i, j, k) => Math.abs(i - 4.5) <= 4.2 + (9 - j) * 0.06 - hash3(i, j, k) * (j < 3 ? 1.8 : 0.2), () => scarfC, undefined, BV);
-  cape.position.set(0, -0.37, -0.04); capeG.add(cape);
+  const scarf = voxelPart([-0.4, -0.08, -0.33], [0.4, 0.08, 0.33], BV * 0.8,
+    (x, y, z) => (x / 0.36) ** 2 + (z / 0.29) ** 2 <= 1 && Math.abs(y) <= 0.065 - 0.02 * ((x / 0.36) ** 2),
+    () => scarfC);
+  scarf.position.set(0, 0.53, 0); body.add(scarf);
+  const capeG = new THREE.Group(); capeG.position.set(0, 0.55, -0.25); body.add(capeG);
+  const cape = voxelPart([-0.36, -0.58, -0.05], [0.36, 0.02, 0.05], BV * 0.8,
+    (x, y, z, i, j, k) => Math.abs(x) <= 0.26 + (-y) * 0.12 && y > -0.5 + hash3(i, 0, k) * 0.07 - Math.abs(x) * 0.06 && Math.abs(z) <= 0.04,
+    () => scarfC);
+  capeG.add(cape);
 
-  // head 19x16x15: wide rounded block, fluffy side tufts, big tall eyes, square cheeks, tiny nose
-  const head = new THREE.Group(); head.position.y = 1.03; body.add(head);
-  const hN = [23, 17, 15], hEll = superEll(9.5, 8.3, 7.3, 5, 0.1);
-  const hInside = inb(hN, (i, j, k, n) => {
-    if (hEll(i, j, k, n)) return true;
-    const x = i - 11, y = j - 8, ax = Math.abs(x);                                    // tufts: stepped fur that sticks out under the ears
-    return ax >= 8 && ax <= 11 && y <= -1 && y >= -6 && Math.abs(k - 7) <= 4 && (ax - 8) <= (y + 6) * 0.55 && hash3(i, j, k) > 0.25;
-  });
-  const face = voxelPart(hN, hInside, (x, y, z, c) => {
-    if (c.front) {
+  // head: wide soft block, fur tufts, tall eyes with a highlight, square cheeks, small nose
+  const head = new THREE.Group(); head.position.y = 0.97; body.add(head);
+  const face = voxelPart([-0.78, -0.56, -0.5], [0.78, 0.56, 0.5], HV,
+    (x, y, z, i, j, k) => {
+      if (se(x, y, z, 0.6, 0.5, 0.46, 4.6) <= 1 + (hash3(i, j, k) - 0.5) * 0.06) return true;
       const ax = Math.abs(x);
-      if (ax >= 4 && ax <= 6 && y >= -2 && y <= 2) return (y >= 1 && x === (x < 0 ? -4 : 6)) ? 0xffffff : FBLACK;   // tall eyes + highlight upper right
-      if (ax >= 7 && ax <= 8 && y >= -5 && y <= -3) return FPINK;                                                    // cheeks
-      if (y === -3 && ax <= 1) return FNOSE;                                                                          // nose
-      if (y === -4 && x === 0) return FNOSE;
-    }
-    return FWHITE;
-  }, [11, 8, 7], HV);
+      return ax >= 0.5 && ax <= 0.74 && y >= -0.4 && y <= -0.04 && Math.abs(z) <= 0.2 && (ax - 0.5) <= (y + 0.4) * 0.62 && hash3(i, j, k) > 0.28;
+    },
+    (x, y, z, c) => {
+      if (z > 0.12 && !c.back) {
+        const ax = Math.abs(x);
+        if (rr(ax, y, 0.14, 0.33, -0.14, 0.17, 0.06)) return (y > 0.07 && (x > 0 ? ax > 0.26 : ax < 0.21)) ? 0xffffff : FBLACK;
+        if (rr(ax, y, 0.37, 0.5, -0.28, -0.15, 0.03)) return FPINK;
+        if (y > -0.2 && y < -0.15 && ax < 0.055) return FNOSE;
+        if (y > -0.235 && y <= -0.2 && ax < 0.028) return FNOSE;
+      }
+      return FWHITE;
+    });
   head.add(face);
   const ears = [];
   for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.46, 0.43, -0.03); ear.rotation.z = -s * 0.3; head.add(ear);
-    const eN = [8, 10, 3];
-    const em = voxelPart(eN, inb(eN, (i, j) => Math.abs(i - 3.5) <= 3.8 - j * 0.4),
-      (x, y, z, c, i, j) => (c.front && j >= 1 && j <= 6 && Math.abs(i - 3.5) <= 2.7 - j * 0.38 ? FPINK : FWHITE), [3.5, 0, 1], HV);
+    const ear = new THREE.Group(); ear.position.set(s * 0.37, 0.42, -0.03); ear.rotation.z = -s * 0.3; head.add(ear);
+    const hw = (y) => 0.19 * (1 - Math.pow(Math.max(y, 0) / 0.48, 1.5));
+    const em = voxelPart([-0.2, 0, -0.08], [0.2, 0.5, 0.08], HV,
+      (x, y, z) => y >= 0 && Math.abs(x) <= hw(y) && Math.abs(z) <= 0.07 * (1 - y / 0.7),
+      (x, y, z, c) => (z > 0 && !c.back && y > 0.04 && y < 0.34 && Math.abs(x) <= hw(y) - 0.05 ? FPINK : FWHITE));
     ear.add(em); ears.push(ear);
   }
 
-  // arms: short purple sleeve, white cuff and hand
+  // arms: purple sleeve, white cuff and paw
   const arms = [];
   for (const s of [-1, 1]) {
-    const arm = new THREE.Group(); arm.position.set(s * 0.44, 0.47, 0.02); body.add(arm);
-    const am = voxelPart([3, 7, 3], () => true, (x, y, z, c, i, j) => (j >= 5 ? tunic : FWHITE), undefined, BV);
-    am.position.set(0, -0.24, 0); arm.add(am); arms.push(arm);
+    const arm = new THREE.Group(); arm.position.set(s * 0.4, 0.46, 0.02); body.add(arm);
+    const am = voxelPart([-0.1, -0.46, -0.1], [0.1, 0.06, 0.1], BV * 0.85,
+      (x, y, z) => se(x, y + 0.2, z, 0.085, 0.26, 0.085, 3) <= 1, (x, y) => (y > -0.15 ? tunic : FWHITE));
+    arm.add(am); arms.push(arm);
   }
-
   const legs = [];
   for (const s of [-1, 1]) {
-    const leg = new THREE.Group(); leg.position.set(s * 0.17, 0.3, 0); g.add(leg);
-    const lm = voxelPart([4, 4, 5], () => true, (x, y, z, c, i, j) => (j === 0 ? DFBROWN : FWHITE), [1.5, 3.5, 2], BV);
-    lm.position.set(0, 0.04, 0.05); leg.add(lm); legs.push(leg);
+    const leg = new THREE.Group(); leg.position.set(s * 0.15, 0.3, 0); g.add(leg);
+    const lm = voxelPart([-0.12, -0.34, -0.12], [0.12, 0.04, 0.2], BV * 0.85,
+      (x, y, z) => (y > -0.22 ? se(x, y + 0.1, z, 0.085, 0.14, 0.085, 3) <= 1 : se(x, y + 0.28, z - 0.04, 0.1, 0.07, 0.15, 3) <= 1),
+      (x, y) => (y < -0.25 ? DFBROWN : FWHITE));
+    leg.add(lm); legs.push(leg);
   }
 
-  // tail: voxel tube along a curve, curls up and back
-  const curve = []; for (let sT = 0; sT <= 1.001; sT += 0.02) curve.push([2 + 2 * Math.sin(sT * 4), 0.5 + 8.5 * sT * sT, 11 - 10.5 * sT]);
-  const tail = new THREE.Group(); tail.position.set(0, 0.1, -0.2); body.add(tail);
-  tail.add(voxelPart([8, 11, 12], (i, j, k) => curve.some(p => (p[0] - i) ** 2 + (p[1] - j) ** 2 + (p[2] - k) ** 2 < 3.0), () => FWHITE, [2, 0, 11], BV));
+  // tail: fat soft tube curling up behind
+  const tpts = []; for (let sT = 0; sT <= 1.001; sT += 0.02) tpts.push([0.13 * Math.sin(sT * 4), 0.02 + 0.52 * sT * sT, -0.55 * sT, 0.075 * (1 - 0.15 * sT)]);
+  const tail = new THREE.Group(); tail.position.set(0, 0.08, -0.22); body.add(tail);
+  tail.add(voxelPart([-0.26, -0.06, -0.7], [0.26, 0.64, 0.1], BV * 0.85,
+    (x, y, z) => tpts.some(p => (p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2 < p[3] * p[3]), () => FWHITE));
 
-  g.userData = { body, head, arms, legs, tail, capeG, ears, ph: Math.random() * 6 };
+  g.userData = { body, head, arms, legs, tail, capeG, ears, ph: Math.random() * 6, k: 0, yaw: 0 };
   return g;
 }
 const pokuMe = makePoku(0), pokuFoe = makePoku(1);
-pokuMe.scale.setScalar(1.55); pokuFoe.scale.setScalar(1.55);
+pokuMe.scale.setScalar(1.3); pokuFoe.scale.setScalar(1.3);
 heroRoot.add(pokuMe); enemyRoot.add(pokuFoe);
 const catPivot = { me: pokuMe, foe: pokuFoe };
-// cat gait: bounding gallop. front paws together, back legs together, body leans into the run, stretches in flight, tail up, cape streams back
-function animate(p, speed, t, dt) {
-  const u = p.userData, k = Math.min(speed / 4, 1);
-  u.ph += dt * (4 + 10 * k); const w = u.ph;
-  const hop = Math.abs(Math.sin(w)), air = Math.max(0, Math.sin(w));
-  u.body.position.y = 0.3 + hop * 0.2 * k + Math.sin(t * 3) * 0.012 * (1 - k);
-  u.body.rotation.x = 0.3 * k + Math.sin(w) * 0.1 * k;
-  u.body.scale.set(1 - air * 0.05 * k, 1 + Math.sin(w * 2) * 0.03 * k, 1 + air * 0.1 * k);
-  u.head.rotation.x = -0.32 * k + Math.sin(w + 1.2) * 0.1 * k;
-  u.head.rotation.z = Math.sin(t * 1.7) * 0.03 * (1 - k);
-  for (const a of u.arms) a.rotation.x = Math.sin(w + 3.14) * 1.0 * k - 0.1 * (1 - k);
-  for (const l of u.legs) l.rotation.x = Math.sin(w) * 0.9 * k;
-  u.tail.rotation.x = -0.15 - 0.55 * k + Math.sin(w) * 0.1 * k;
-  u.tail.rotation.y = Math.sin(t * 2.4) * (0.35 - 0.2 * k);
-  u.capeG.rotation.x = 0.1 + 0.6 * k + Math.sin(w * 1.5) * 0.12 * k;
-  u.ears[0].rotation.z = 0.2 + Math.sin(t * 0.9) * 0.02 + k * 0.25; u.ears[1].rotation.z = -0.2 - Math.sin(t * 1.1 + 2) * 0.02 - k * 0.25;
+const angDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+// Cat gait: a bounding gallop driven by distance covered. Stretch in the air, squash on landing, front paws together then back legs together,
+// spine pitching, head leading, ears swept back, tail whipping, cape streaming. Facing eases toward where you run (or where you aim while shooting).
+function animate(p, speed, wantYaw, t, dt) {
+  const u = p.userData;
+  u.k += (Math.min(speed / 4.5, 1) - u.k) * (1 - Math.exp(-12 * dt)); const k = u.k;
+  u.yaw += angDiff(u.yaw, wantYaw) * (1 - Math.exp(-14 * dt)); p.rotation.y = u.yaw;
+  u.ph += speed * dt * 1.55; const w = u.ph, s1 = Math.sin(w), c1 = Math.cos(w), air = Math.max(0, s1), land = Math.max(0, -s1);
+  u.body.position.y = 0.3 + (Math.abs(s1) * 0.3 - 0.04) * k + Math.sin(t * 2.6) * 0.012 * (1 - k);
+  u.body.rotation.x = (0.2 + c1 * 0.2) * k;
+  u.body.scale.set(1 - air * 0.07 * k + land * 0.06 * k, 1 - land * 0.14 * k + air * 0.03 * k + Math.sin(t * 2.6) * 0.012 * (1 - k), 1 + air * 0.2 * k - land * 0.05 * k);
+  u.head.rotation.x = (-0.3 - c1 * 0.16) * k; u.head.rotation.z = Math.sin(t * 1.6) * 0.04 * (1 - k) + Math.sin(w) * 0.05 * k;
+  u.arms[0].rotation.x = u.arms[1].rotation.x = -s1 * 1.15 * k - 0.1 * (1 - k) + Math.sin(t * 2.6 + 1) * 0.03 * (1 - k);
+  u.legs[0].rotation.x = u.legs[1].rotation.x = s1 * 1.0 * k;
+  u.tail.rotation.x = -0.2 - 0.5 * k - c1 * 0.15 * k; u.tail.rotation.y = Math.sin(t * 2.2) * (0.4 - 0.15 * k) + Math.sin(w * 2) * 0.25 * k;
+  u.capeG.rotation.x = 0.15 + 0.8 * k + Math.sin(w * 1.5) * 0.15 * k;
+  const fl = Math.sin(t * 0.7) > 0.96 ? 0.25 : 0;                             // an occasional ear flick at rest
+  u.ears[0].rotation.x = u.ears[1].rotation.x = -0.45 * k; u.ears[0].rotation.z = 0.3 + k * 0.12 - fl; u.ears[1].rotation.z = -0.3 - k * 0.12;
 }
 
 // ---------- input ----------
@@ -468,7 +488,7 @@ addEventListener('resize', () => {
 // ---------- loop ----------
 const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3(0, 0, 11);
-const bot = { dir: new THREE.Vector3(1, 0, 0), t: 0, shootT: 0, moving: true };
+const bot = { dir: new THREE.Vector3(1, 0, 0), t: 0, shootT: 0, moving: true, face: 0, faceT: 0 };
 let frames = 0, fpsT = 0; const dts = [];
 const hud = document.getElementById('hud');
 let shotT = 0;
@@ -486,12 +506,13 @@ function frame() {
   if (mv.lengthSq() > 0.01) { heroRoot.position.addScaledVector(mv, 6.5 * dt); resolve(heroRoot.position, 0.5); }
   updateAim();
   const toAim = new THREE.Vector3().subVectors(aimPt, heroRoot.position).setY(0);
-  if (toAim.lengthSq() > 0.01 && catPivot.me) catPivot.me.rotation.y = Math.atan2(toAim.x, toAim.z);
+  const aimYaw = toAim.lengthSq() > 0.01 ? Math.atan2(toAim.x, toAim.z) : pokuMe.userData.yaw;
+  const heroYaw = (firing || mv.lengthSq() < 0.01) ? aimYaw : Math.atan2(mv.x, mv.z);
   shotT -= dt;
   if (firing && shotT <= 0) { shotT = 0.1; const j = new THREE.Vector3(rnd(-0.9, 0.9), 0, rnd(-0.9, 0.9)); shoot(heroRoot.position, aimPt.clone().add(j), 0, rnd(0.55, 0.95)); }
   if (mv.lengthSq() > 0 && Math.random() < dt * 14) splat(heroRoot.position.x, heroRoot.position.z, rnd(0.35, 0.6), 0); // swim-ish trail
 
-  animate(pokuMe, heroSpeed, t, dt); animate(pokuFoe, bot.moving ? 4.2 : 0, t, dt);
+  animate(pokuMe, heroSpeed, heroYaw, t, dt); animate(pokuFoe, bot.moving ? 4.2 : 0, bot.faceT > 0 ? bot.face : Math.atan2(bot.dir.x, bot.dir.z), t, dt); bot.faceT -= dt;
 
   // bot
   bot.t -= dt; bot.shootT -= dt;
@@ -505,7 +526,7 @@ function frame() {
     bot.shootT = 0.14;
     const tgt = (Math.random() < 0.5 ? heroRoot.position.clone() : new THREE.Vector3(enemyRoot.position.x + rnd(-6, 6), 0, enemyRoot.position.z + rnd(1, 8))).add(new THREE.Vector3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5)));
     shoot(enemyRoot.position, tgt, 1, rnd(0.55, 0.95));
-    if (catPivot.foe) catPivot.foe.rotation.y = Math.atan2(tgt.x - enemyRoot.position.x, tgt.z - enemyRoot.position.z);
+    bot.face = Math.atan2(tgt.x - enemyRoot.position.x, tgt.z - enemyRoot.position.z); bot.faceT = 0.35;
   }
 
   // control point
