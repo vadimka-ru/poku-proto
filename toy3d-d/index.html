@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Spike: toy 3D top-down</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#1b1633;font:12px/1.4 system-ui,sans-serif;color:#fff}
+  canvas{display:block;touch-action:none}
+  #hud{position:fixed;left:10px;top:8px;opacity:.85;pointer-events:none;text-shadow:0 1px 2px #000}
+  #modes{position:fixed;left:10px;bottom:10px;display:flex;gap:8px}
+  #modes a{color:#fff;background:#0007;padding:8px 10px;border-radius:8px;text-decoration:none}
+</style>
+</head>
+<body>
+<div id="hud">loading…</div>
+<div id="modes"><a href="?">full</a><a href="?ao=0">no AO</a><a href="?fx=0">no fx</a><a href="?fx=0&pr=1">no fx, 1x</a></div>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/": "./vendor/addons/"
+} }
+</script>
+<script type="module" src="./main.js?v=11"></script>
+</body>
+</html>
