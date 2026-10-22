@@ -11,6 +11,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const Q = new URLSearchParams(location.search);
 const FX = Q.get('fx') !== '0';
+const CLOSE = Q.get('close') === '1';
 const AO = FX && Q.get('ao') !== '0';
 
 const W = 20, L = 40;                    // arena size in metres (x, z)
@@ -227,55 +228,148 @@ function ring(team) {
 }
 heroRoot.add(ring(0)); enemyRoot.add(ring(1));
 
-const FUR = 0xffd9bd, EAR = 0xff8fa3, EYE = 0x2a1f4a, SHOE = 0x3a2f55;
-function part(geo, color, x, y, z, parent, rough = 0.6) {
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: rough }));
-  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
-}
-function makePoku(team) {
-  const g = new THREE.Group();            // faces +z
-  const body = new THREE.Group(); g.add(body);
-  const shirt = team === 0 ? 0x5b5bff : 0x8a4dff;
-  part(new RoundedBoxGeometry(0.62, 0.62, 0.5, 3, 0.2), shirt, 0, 0.68, 0, body);                 // torso
-  const head = new THREE.Group(); head.position.y = 1.32; body.add(head);
-  part(new RoundedBoxGeometry(0.98, 0.82, 0.86, 4, 0.3), FUR, 0, 0, 0, head);                     // big head
-  for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.3, 0.52, -0.02); ear.rotation.z = -s * 0.18; head.add(ear);
-    part(new RoundedBoxGeometry(0.26, 0.4, 0.2, 2, 0.1), FUR, 0, 0, 0, ear);
-    part(new RoundedBoxGeometry(0.12, 0.2, 0.06, 2, 0.04), EAR, 0, 0.04, 0.09, ear);
-    part(new THREE.SphereGeometry(0.075, 10, 8), EYE, s * 0.22, 0.02, 0.42, head).scale.set(0.9, 1.5, 0.5);   // eyes
-    part(new THREE.SphereGeometry(0.09, 10, 8), 0xff9aa8, s * 0.36, -0.14, 0.38, head).scale.set(1, 0.65, 0.4); // cheeks
+// Voxel look: every body part is one InstancedMesh of small rounded cubes, coloured per voxel (fur jitter = fluff, face painted on the front layer).
+const VOX = 0.09;
+const voxMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true });
+function hash3(i, j, k) { const h = Math.sin(i * 127.1 + j * 311.7 + k * 74.7) * 43758.5453; return h - Math.floor(h); }
+// Surface mesher: only the exposed faces of the voxels, no gaps, no bevels, flat faces with a stepped silhouette (like a pixel sprite pulled into 3D).
+// dim [nx,ny,nz]; inside(i,j,k) in index space; color(i,j,k,ctx) -> hex (ctx.front = this is a +z face, etc.); anchor = index that sits at the origin
+const FACES = [ // dir, normal, 4 corners (unit cube offsets)
+  [[1, 0, 0], [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]]],
+  [[-1, 0, 0], [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]]],
+  [[0, 1, 0], [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]]],
+  [[0, -1, 0], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]]],
+  [[0, 0, 1], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]],
+  [[0, 0, -1], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]],
+];
+function voxelPart(dim, inside0, color, anchor) {
+  const [nx, ny, nz] = dim, inside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz && inside0(i, j, k), an = anchor || [(nx - 1) / 2, (ny - 1) / 2, (nz - 1) / 2];
+  const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
+    if (!inside(i, j, k)) continue;
+    for (const [d, quad] of FACES) {
+      if (inside(i + d[0], j + d[1], k + d[2])) continue;
+      const ctx = { front: d[2] === 1, back: d[2] === -1, top: d[1] === 1, side: d[0] !== 0 };
+      c.setHex(color(i - an[0], j - an[1], k - an[2], ctx, i, j, k));
+      const base = pos.length / 3;
+      for (const q of quad) { pos.push((i - an[0] - 0.5 + q[0]) * VOX, (j - an[1] - 0.5 + q[1]) * VOX, (k - an[2] - 0.5 + q[2]) * VOX); nor.push(d[0], d[1], d[2]); col.push(c.r, c.g, c.b); }
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
   }
-  part(new THREE.SphereGeometry(0.05, 8, 6), 0xff7f93, 0, -0.08, 0.43, head);                      // nose
-  part(new RoundedBoxGeometry(0.42, 0.5, 0.2, 3, 0.09), 0xff7a3d, 0, 0.7, -0.34, body);            // backpack
-  const tail = new THREE.Group(); tail.position.set(0, 0.45, -0.28); body.add(tail);
-  part(new THREE.CapsuleGeometry(0.07, 0.4, 4, 8), FUR, 0, 0.18, -0.12, tail).rotation.x = -0.5;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(geo, voxMat);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  return mesh;
+}
+const FWHITE = 0xfff7ee, FPINK = 0xf5a0a8, FNOSE = 0xe27d92, FBLACK = 0x15121c, FBROWN = 0x8a5a36, DFBROWN = 0x5e3b22, FGOLD = 0xf0b838;
+const sq = (x, p) => Math.pow(Math.abs(x), p);
+function superEll(a, b, c, p, jitter) { // inside() for a rounded box-ish blob centred in an odd grid
+  return (i, j, k, n) => {
+    const x = (i - (n[0] - 1) / 2) / a, y = (j - (n[1] - 1) / 2) / b, z = (k - (n[2] - 1) / 2) / c;
+    return sq(x, p) + sq(y, p) + sq(z, p) <= 1 + (hash3(i, j, k) - 0.5) * jitter;
+  };
+}
+
+function makePoku(team) {
+  const g = new THREE.Group();                  // faces +z, origin on the floor
+  const tunic = team === 0 ? 0x5d52b8 : 0x45407a, scarfC = team === 0 ? 0xdb3b3b : 0x8a4dff;
+
+  // body pivot sits at the hips
+  const body = new THREE.Group(); body.position.y = 0.3; g.add(body);
+
+  // torso 7x6x5
+  const tN = [7, 6, 5], tIn = superEll(3.9, 3.4, 2.9, 4, 0.12);
+  const tInside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < 7 && j < 6 && k < 5 && tIn(i, j, k, tN);
+  const torso = voxelPart(tN, tInside, (x, y, z, c, i, j) => {
+    if (j === 1 && (c.front || c.back || c.side)) return Math.abs(x) <= 1 && c.front ? FGOLD : DFBROWN;                 // belt + buckle
+    if (c.front && Math.abs((x - 0.8) + (y - 0.2) * 0.9) < 0.75 && j > 1) return FBROWN;                               // satchel strap
+    return tunic;
+  });
+  torso.position.set(0, 0.27, 0); body.add(torso);
+
+  // satchel on the right hip (front-right)
+  const bag = voxelPart([4, 4, 3], () => true, (x, y, z, c, i, j) => (j === 3 ? DFBROWN : (c.front && i === 1 && j === 1 ? FGOLD : FBROWN)));
+  bag.position.set(0.37, 0.12, 0.12); body.add(bag);
+
+  // scarf ring + hanging cape
+  const scarf = voxelPart([9, 2, 7], (i, j, k) => { const x = (i - 4) / 4.4, z = (k - 3) / 3.4; return x * x + z * z <= 1; }, () => scarfC);
+  scarf.position.set(0, 0.55, 0); body.add(scarf);
+  const capeG = new THREE.Group(); capeG.position.set(0, 0.55, -0.27); body.add(capeG);
+  const cape = voxelPart([8, 8, 2], (i, j, k) => Math.abs(i - 3.5) <= 3.2 + (7 - j) * 0.08 - hash3(i, j, k) * (j < 2 ? 1.6 : 0.2), () => scarfC);
+  cape.position.set(0, -0.36, -0.03); capeG.add(cape);
+
+  // head 13x11x11 + painted face
+  const head = new THREE.Group(); head.position.y = 1.07; body.add(head);
+  const hN = [13, 11, 11], hIn = superEll(6.4, 5.4, 5.4, 4, 0.1);
+  const hInside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < 13 && j < 11 && k < 11 && hIn(i, j, k, hN);
+  const face = voxelPart(hN, hInside, (x, y, z, c) => {
+    if (c.front) {
+      const ax = Math.abs(x);
+      if ((ax === 3 || ax === 4) && y >= -1 && y <= 1) return (y === 1 && x === (x < 0 ? -3 : 4)) ? 0xffffff : FBLACK;   // eyes + highlight
+      if ((ax === 5 || ax === 4) && (y === -3 || y === -2)) return FPINK;                                              // cheeks
+      if (y === -1 && ax <= 1 && ax !== 99 && Math.abs(x) <= 1) return FNOSE;                                           // nose, wide row
+      if (y === -2 && x === 0) return FNOSE;                                                                            // nose tip
+    }
+    return FWHITE;
+  });
+  head.add(face);
+  const ears = [];
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Group(); ear.position.set(s * 0.43, 0.46, -0.04); ear.rotation.z = -s * 0.2; head.add(ear);
+    const eIn = (i, j, k) => j >= 0 && k >= 0 && k < 3 && Math.abs(i - 2.5) <= 2.6 - j * 0.42;
+    const em = voxelPart([6, 6, 3], eIn, (x, y, z, c, i, j) => (c.front && j >= 1 && j <= 4 && Math.abs(i - 2.5) <= 2.1 - j * 0.42 ? FPINK : FWHITE), [2.5, 0, 1]);
+    em.position.set(0, 0.04, 0); ear.add(em); ears.push(ear);
+  }
+
+  // arms: purple sleeve, white cuff and glove
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group(); arm.position.set(s * 0.45, 0.46, 0.02); body.add(arm);
+    const am = voxelPart([3, 6, 3], (i, j, k) => !((i === 0 || i === 2) && (k === 0 || k === 2)) || j > 1, (x, y, z, c, i, j) => (j >= 4 ? tunic : FWHITE));
+    am.position.set(0, -0.2, 0); arm.add(am); arms.push(arm);
+  }
+
+  // legs
   const legs = [];
   for (const s of [-1, 1]) {
-    const leg = new THREE.Group(); leg.position.set(s * 0.17, 0.36, 0); g.add(leg);
-    part(new RoundedBoxGeometry(0.2, 0.34, 0.2, 2, 0.08), FUR, 0, -0.1, 0, leg);
-    part(new RoundedBoxGeometry(0.24, 0.14, 0.34, 2, 0.06), SHOE, 0, -0.3, 0.05, leg);
-    legs.push(leg);
-    const arm = new THREE.Group(); arm.position.set(s * 0.4, 0.85, 0); body.add(arm);
-    part(new RoundedBoxGeometry(0.17, 0.4, 0.17, 2, 0.07), FUR, 0, -0.14, 0, arm);
-    legs.push(arm);
+    const leg = new THREE.Group(); leg.position.set(s * 0.19, 0.3, 0); g.add(leg);
+    const lm = voxelPart([3, 3, 4], () => true, (x, y, z, c, i, j) => (j === 0 ? DFBROWN : FWHITE), [1, 3, 1.5]);
+    lm.position.set(0, 0, 0.03); leg.add(lm); legs.push(leg);
   }
-  g.userData = { body, head, legs, tail };
+
+  // tail: voxel tube along a curve (grid index space), starts at the anchor
+  const curve = []; for (let sT = 0; sT <= 1.001; sT += 0.025) curve.push([2 + 1.6 * Math.sin(sT * 4), 0.5 + 7 * sT * sT, 10 - 9.5 * sT]);
+  const tail = new THREE.Group(); tail.position.set(0, 0.1, -0.2); body.add(tail);
+  const tm = voxelPart([7, 10, 11], (i, j, k) => curve.some(p => (p[0] - i) ** 2 + (p[1] - j) ** 2 + (p[2] - k) ** 2 < 2.4), () => FWHITE, [2, 0, 10]);
+  tail.add(tm);
+
+  g.userData = { body, head, arms, legs, tail, capeG, ears, ph: Math.random() * 6 };
   return g;
 }
 const pokuMe = makePoku(0), pokuFoe = makePoku(1);
-pokuMe.scale.setScalar(1.4); pokuFoe.scale.setScalar(1.4);
+pokuMe.scale.setScalar(1.55); pokuFoe.scale.setScalar(1.55);
 heroRoot.add(pokuMe); enemyRoot.add(pokuFoe);
 const catPivot = { me: pokuMe, foe: pokuFoe };
-function animate(p, speed, t) {
-  const u = p.userData, k = Math.min(speed / 4, 1), w = t * 12;
-  u.body.position.y = Math.abs(Math.sin(w)) * 0.11 * k;
-  u.body.scale.set(1 + Math.sin(w * 2) * 0.03 * k, 1 - Math.sin(w * 2) * 0.03 * k, 1);
-  u.head.rotation.z = Math.sin(w) * 0.06 * k;
-  u.legs[0].rotation.x = Math.sin(w) * 0.7 * k; u.legs[1].rotation.x = -Math.sin(w) * 0.7 * k;
-  u.legs[2].rotation.x = -Math.sin(w) * 0.5 * k; u.legs[3].rotation.x = Math.sin(w) * 0.5 * k;
-  u.tail.rotation.y = Math.sin(t * 5) * 0.4;
-  u.body.position.y += Math.sin(t * 3) * 0.015 * (1 - k);
+// cat gait: bounding gallop. front paws together, back legs together, body leans into the run, stretches in flight, tail up, cape streams back
+function animate(p, speed, t, dt) {
+  const u = p.userData, k = Math.min(speed / 4, 1);
+  u.ph += dt * (4 + 10 * k); const w = u.ph;
+  const hop = Math.abs(Math.sin(w)), air = Math.max(0, Math.sin(w));
+  u.body.position.y = 0.3 + hop * 0.2 * k + Math.sin(t * 3) * 0.012 * (1 - k);
+  u.body.rotation.x = 0.3 * k + Math.sin(w) * 0.1 * k;
+  u.body.scale.set(1 - air * 0.05 * k, 1 + Math.sin(w * 2) * 0.03 * k, 1 + air * 0.1 * k);
+  u.head.rotation.x = -0.32 * k + Math.sin(w + 1.2) * 0.1 * k;
+  u.head.rotation.z = Math.sin(t * 1.7) * 0.03 * (1 - k);
+  for (const a of u.arms) a.rotation.x = Math.sin(w + 3.14) * 1.0 * k - 0.1 * (1 - k);
+  for (const l of u.legs) l.rotation.x = Math.sin(w) * 0.9 * k;
+  u.tail.rotation.x = -0.15 - 0.55 * k + Math.sin(w) * 0.1 * k;
+  u.tail.rotation.y = Math.sin(t * 2.4) * (0.35 - 0.2 * k);
+  u.capeG.rotation.x = 0.1 + 0.6 * k + Math.sin(w * 1.5) * 0.12 * k;
+  u.ears[0].rotation.z = 0.2 + Math.sin(t * 0.9) * 0.02 + k * 0.25; u.ears[1].rotation.z = -0.2 - Math.sin(t * 1.1 + 2) * 0.02 - k * 0.25;
 }
 
 // ---------- input ----------
@@ -373,7 +467,7 @@ addEventListener('resize', () => {
 // ---------- loop ----------
 const clock = new THREE.Clock();
 const camTarget = new THREE.Vector3(0, 0, 11);
-const bot = { dir: new THREE.Vector3(1, 0, 0), t: 0, shootT: 0 };
+const bot = { dir: new THREE.Vector3(1, 0, 0), t: 0, shootT: 0, moving: true };
 let frames = 0, fpsT = 0; const dts = [];
 const hud = document.getElementById('hud');
 let shotT = 0;
@@ -396,7 +490,7 @@ function frame() {
   if (firing && shotT <= 0) { shotT = 0.1; const j = new THREE.Vector3(rnd(-0.9, 0.9), 0, rnd(-0.9, 0.9)); shoot(heroRoot.position, aimPt.clone().add(j), 0, rnd(0.55, 0.95)); }
   if (mv.lengthSq() > 0 && Math.random() < dt * 14) splat(heroRoot.position.x, heroRoot.position.z, rnd(0.35, 0.6), 0); // swim-ish trail
 
-  animate(pokuMe, heroSpeed, t); animate(pokuFoe, 4.2, t);
+  animate(pokuMe, heroSpeed, t, dt); animate(pokuFoe, bot.moving ? 4.2 : 0, t, dt);
 
   // bot
   bot.t -= dt; bot.shootT -= dt;
@@ -405,7 +499,7 @@ function frame() {
     if (!onPoint(enemyRoot.position) || Math.random() < 0.3) bot.dir.set(PT.x - enemyRoot.position.x, 0, PT.z - enemyRoot.position.z).normalize();
     else { const a = Math.random() * 6.283; bot.dir.set(Math.cos(a), 0, Math.sin(a)).multiplyScalar(0.35); }
   }
-  enemyRoot.position.addScaledVector(bot.dir, 4.2 * dt); resolve(enemyRoot.position, 0.5);
+  enemyRoot.position.addScaledVector(bot.dir, 4.2 * dt); resolve(enemyRoot.position, 0.5); bot.moving = bot.dir.lengthSq() > 0.2;
   if (bot.shootT <= 0) {
     bot.shootT = 0.14;
     const tgt = (Math.random() < 0.5 ? heroRoot.position.clone() : new THREE.Vector3(enemyRoot.position.x + rnd(-6, 6), 0, enemyRoot.position.z + rnd(1, 8))).add(new THREE.Vector3(rnd(-1.5, 1.5), 0, rnd(-1.5, 1.5)));
@@ -437,8 +531,8 @@ function frame() {
   // camera: tilted ~58°, follows hero, tops out at arena edges
   camTarget.lerp(heroRoot.position, 1 - Math.pow(0.001, dt));
   const cz = THREE.MathUtils.clamp(camTarget.z, -L / 2 + 4, L / 2 - 4), cx = THREE.MathUtils.clamp(camTarget.x, -3, 3);
-  camera.position.set(cx, 25, cz + 15.5);
-  camera.lookAt(cx, 0, cz);
+  if (CLOSE) { camera.position.set(heroRoot.position.x, 5.5, heroRoot.position.z + 5.2); camera.lookAt(heroRoot.position.x, 1.1, heroRoot.position.z); }
+  else { camera.position.set(cx, 25, cz + 15.5); camera.lookAt(cx, 0, cz); }
   sun.position.set(cx - 14, 16, cz + 8); sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld();
 
   if (composer) composer.render(); else renderer.render(scene, camera);
