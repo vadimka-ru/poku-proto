@@ -2,7 +2,6 @@
 // Idea borrowed from how inkwave-aah.pages.dev does it: flat bright blocks + soft light + AO + bloom,
 // and the paint itself (glossy, raised) carries the richness.
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoundedBoxGeometry } from 'three/addons/RoundedBoxGeometry.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -13,7 +12,6 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const Q = new URLSearchParams(location.search);
 const FX = Q.get('fx') !== '0';
 const AO = FX && Q.get('ao') !== '0';
-const CAT_YAW = parseFloat(Q.get('yaw') || '0'); // rotate the cat model if it faces the wrong way
 
 const W = 20, L = 40;                    // arena size in metres (x, z)
 const TEAM = [0xffb21e, 0x8a4dff];        // 0 = us (bottom, +z), 1 = them (top, -z)
@@ -185,8 +183,7 @@ function base(z, team) {
 }
 base(L / 2 - 3.2, 0); base(-L / 2 + 3.2, 1);
 
-// ---------- heroes ----------
-const loader = new GLTFLoader();
+// ---------- heroes: Poku built from rounded primitives (cream cat, pink ear tips, blue-violet shirt, orange pack) ----------
 const heroRoot = new THREE.Group(); scene.add(heroRoot);
 const enemyRoot = new THREE.Group(); scene.add(enemyRoot);
 heroRoot.position.set(0, 0, 11); enemyRoot.position.set(0, 0, -11);
@@ -197,37 +194,56 @@ function ring(team) {
 }
 heroRoot.add(ring(0)); enemyRoot.add(ring(1));
 
-function fallbackCat(team) {
-  const g = new THREE.Group();
-  const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.5, 6, 14), mat(0xffffff)); b.position.y = 0.65; g.add(b);
-  const h = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 14), mat(0xffffff)); h.position.y = 1.35; g.add(h);
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.3, 4), mat(0xffffff)); e.position.set(s * 0.25, 1.75, 0); g.add(e); }
-  g.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
+const FUR = 0xffd9bd, EAR = 0xff8fa3, EYE = 0x2a1f4a, SHOE = 0x3a2f55;
+function part(geo, color, x, y, z, parent, rough = 0.6) {
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: rough }));
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+}
+function makePoku(team) {
+  const g = new THREE.Group();            // faces +z
+  const body = new THREE.Group(); g.add(body);
+  const shirt = team === 0 ? 0x5b5bff : 0x8a4dff;
+  part(new RoundedBoxGeometry(0.62, 0.62, 0.5, 3, 0.2), shirt, 0, 0.68, 0, body);                 // torso
+  const head = new THREE.Group(); head.position.y = 1.32; body.add(head);
+  part(new RoundedBoxGeometry(0.98, 0.82, 0.86, 4, 0.3), FUR, 0, 0, 0, head);                     // big head
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Group(); ear.position.set(s * 0.3, 0.52, -0.02); ear.rotation.z = -s * 0.18; head.add(ear);
+    part(new RoundedBoxGeometry(0.26, 0.4, 0.2, 2, 0.1), FUR, 0, 0, 0, ear);
+    part(new RoundedBoxGeometry(0.12, 0.2, 0.06, 2, 0.04), EAR, 0, 0.04, 0.09, ear);
+    part(new THREE.SphereGeometry(0.075, 10, 8), EYE, s * 0.22, 0.02, 0.42, head).scale.set(0.9, 1.5, 0.5);   // eyes
+    part(new THREE.SphereGeometry(0.09, 10, 8), 0xff9aa8, s * 0.36, -0.14, 0.38, head).scale.set(1, 0.65, 0.4); // cheeks
+  }
+  part(new THREE.SphereGeometry(0.05, 8, 6), 0xff7f93, 0, -0.08, 0.43, head);                      // nose
+  part(new RoundedBoxGeometry(0.42, 0.5, 0.2, 3, 0.09), 0xff7a3d, 0, 0.7, -0.34, body);            // backpack
+  const tail = new THREE.Group(); tail.position.set(0, 0.45, -0.28); body.add(tail);
+  part(new THREE.CapsuleGeometry(0.07, 0.4, 4, 8), FUR, 0, 0.18, -0.12, tail).rotation.x = -0.5;
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Group(); leg.position.set(s * 0.17, 0.36, 0); g.add(leg);
+    part(new RoundedBoxGeometry(0.2, 0.34, 0.2, 2, 0.08), FUR, 0, -0.1, 0, leg);
+    part(new RoundedBoxGeometry(0.24, 0.14, 0.34, 2, 0.06), SHOE, 0, -0.3, 0.05, leg);
+    legs.push(leg);
+    const arm = new THREE.Group(); arm.position.set(s * 0.4, 0.85, 0); body.add(arm);
+    part(new RoundedBoxGeometry(0.17, 0.4, 0.17, 2, 0.07), FUR, 0, -0.14, 0, arm);
+    legs.push(arm);
+  }
+  g.userData = { body, head, legs, tail };
   return g;
 }
-
-const catPivot = { me: null, foe: null };
-loader.load('./rodin_cat.glb', (gltf) => {
-  const m = gltf.scene;
-  const box = new THREE.Box3().setFromObject(m);
-  const size = new THREE.Vector3(); box.getSize(size);
-  const k = 1.75 / size.y;
-  const wrap = new THREE.Group();
-  m.scale.setScalar(k);
-  box.setFromObject(m);
-  m.position.set(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
-  m.rotation.y = CAT_YAW;
-  wrap.add(m);
-  wrap.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) { o.material.roughness = 0.7; o.material.metalness = 0; } } });
-  const a = wrap.clone(true), b = wrap.clone(true);
-  heroRoot.add(a); enemyRoot.add(b);
-  catPivot.me = a; catPivot.foe = b;
-  // tint enemy so it reads as the other team
-  b.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.emissive = new THREE.Color(TEAM[1]); o.material.emissiveIntensity = 0.28; } });
-  a.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.emissive = new THREE.Color(TEAM[0]); o.material.emissiveIntensity = 0.12; } });
-}, undefined, () => {
-  const a = fallbackCat(0), b = fallbackCat(1); heroRoot.add(a); enemyRoot.add(b); catPivot.me = a; catPivot.foe = b;
-});
+const pokuMe = makePoku(0), pokuFoe = makePoku(1);
+pokuMe.scale.setScalar(1.4); pokuFoe.scale.setScalar(1.4);
+heroRoot.add(pokuMe); enemyRoot.add(pokuFoe);
+const catPivot = { me: pokuMe, foe: pokuFoe };
+function animate(p, speed, t) {
+  const u = p.userData, k = Math.min(speed / 4, 1), w = t * 12;
+  u.body.position.y = Math.abs(Math.sin(w)) * 0.11 * k;
+  u.body.scale.set(1 + Math.sin(w * 2) * 0.03 * k, 1 - Math.sin(w * 2) * 0.03 * k, 1);
+  u.head.rotation.z = Math.sin(w) * 0.06 * k;
+  u.legs[0].rotation.x = Math.sin(w) * 0.7 * k; u.legs[1].rotation.x = -Math.sin(w) * 0.7 * k;
+  u.legs[2].rotation.x = -Math.sin(w) * 0.5 * k; u.legs[3].rotation.x = Math.sin(w) * 0.5 * k;
+  u.tail.rotation.y = Math.sin(t * 5) * 0.4;
+  u.body.position.y += Math.sin(t * 3) * 0.015 * (1 - k);
+}
 
 // ---------- input ----------
 const keys = new Set();
@@ -337,6 +353,7 @@ function frame() {
     (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0));
   mv.x += stick.x; mv.z += stick.y;
   if (mv.lengthSq() > 1) mv.normalize();
+  const heroSpeed = mv.lengthSq() > 0.01 ? 6.5 * Math.min(mv.length(), 1) : 0;
   if (mv.lengthSq() > 0.01) { heroRoot.position.addScaledVector(mv, 6.5 * dt); resolve(heroRoot.position, 0.5); }
   updateAim();
   const toAim = new THREE.Vector3().subVectors(aimPt, heroRoot.position).setY(0);
@@ -344,6 +361,8 @@ function frame() {
   shotT -= dt;
   if (firing && shotT <= 0) { shotT = 0.1; const j = new THREE.Vector3(rnd(-0.9, 0.9), 0, rnd(-0.9, 0.9)); shoot(heroRoot.position, aimPt.clone().add(j), 0, rnd(0.55, 0.95)); }
   if (mv.lengthSq() > 0 && Math.random() < dt * 14) splat(heroRoot.position.x, heroRoot.position.z, rnd(0.35, 0.6), 0); // swim-ish trail
+
+  animate(pokuMe, heroSpeed, t); animate(pokuFoe, 4.2, t);
 
   // bot
   bot.t -= dt; bot.shootT -= dt;
