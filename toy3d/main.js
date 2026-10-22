@@ -242,7 +242,7 @@ const FACES = [ // dir, normal, 4 corners (unit cube offsets)
   [[0, 0, 1], [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]]],
   [[0, 0, -1], [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]],
 ];
-function voxelPart(dim, inside0, color, anchor) {
+function voxelPart(dim, inside0, color, anchor, v = VOX) {
   const [nx, ny, nz] = dim, inside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < nx && j < ny && k < nz && inside0(i, j, k), an = anchor || [(nx - 1) / 2, (ny - 1) / 2, (nz - 1) / 2];
   const pos = [], nor = [], col = [], idx = [], c = new THREE.Color();
   for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) {
@@ -252,7 +252,7 @@ function voxelPart(dim, inside0, color, anchor) {
       const ctx = { front: d[2] === 1, back: d[2] === -1, top: d[1] === 1, side: d[0] !== 0 };
       c.setHex(color(i - an[0], j - an[1], k - an[2], ctx, i, j, k));
       const base = pos.length / 3;
-      for (const q of quad) { pos.push((i - an[0] - 0.5 + q[0]) * VOX, (j - an[1] - 0.5 + q[1]) * VOX, (k - an[2] - 0.5 + q[2]) * VOX); nor.push(d[0], d[1], d[2]); col.push(c.r, c.g, c.b); }
+      for (const q of quad) { pos.push((i - an[0] - 0.5 + q[0]) * v, (j - an[1] - 0.5 + q[1]) * v, (k - an[2] - 0.5 + q[2]) * v); nor.push(d[0], d[1], d[2]); col.push(c.r, c.g, c.b); }
       idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
   }
@@ -265,7 +265,7 @@ function voxelPart(dim, inside0, color, anchor) {
   mesh.castShadow = true; mesh.receiveShadow = true;
   return mesh;
 }
-const FWHITE = 0xfff7ee, FPINK = 0xf5a0a8, FNOSE = 0xe27d92, FBLACK = 0x15121c, FBROWN = 0x8a5a36, DFBROWN = 0x5e3b22, FGOLD = 0xf0b838;
+const FWHITE = 0xffffff, FPINK = 0xf5a0a8, FNOSE = 0xe27d92, FBLACK = 0x15121c, FBROWN = 0x8a5a36, DFBROWN = 0x5e3b22, FGOLD = 0xf0b838;
 const sq = (x, p) => Math.pow(Math.abs(x), p);
 function superEll(a, b, c, p, jitter) { // inside() for a rounded box-ish blob centred in an odd grid
   return (i, j, k, n) => {
@@ -277,75 +277,76 @@ function superEll(a, b, c, p, jitter) { // inside() for a rounded box-ish blob c
 function makePoku(team) {
   const g = new THREE.Group();                  // faces +z, origin on the floor
   const tunic = team === 0 ? 0x5d52b8 : 0x45407a, scarfC = team === 0 ? 0xdb3b3b : 0x8a4dff;
+  const BV = 0.075, HV = 0.0625;                // body voxel, head voxel (finer, the face carries the character)
+  const inb = (n, f) => (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < n[0] && j < n[1] && k < n[2] && f(i, j, k, n);
 
-  // body pivot sits at the hips
-  const body = new THREE.Group(); body.position.y = 0.3; g.add(body);
+  const body = new THREE.Group(); body.position.y = 0.3; g.add(body);   // pivot at the hips
 
-  // torso 7x6x5
-  const tN = [7, 6, 5], tIn = superEll(3.9, 3.4, 2.9, 4, 0.12);
-  const tInside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < 7 && j < 6 && k < 5 && tIn(i, j, k, tN);
-  const torso = voxelPart(tN, tInside, (x, y, z, c, i, j) => {
-    if (j === 1 && (c.front || c.back || c.side)) return Math.abs(x) <= 1 && c.front ? FGOLD : DFBROWN;                 // belt + buckle
-    if (c.front && Math.abs((x - 0.8) + (y - 0.2) * 0.9) < 0.75 && j > 1) return FBROWN;                               // satchel strap
+  // torso 9x7x6: tunic, belt with buckle, chest strap
+  const tN = [9, 7, 6];
+  const torso = voxelPart(tN, inb(tN, superEll(4.9, 3.9, 3.3, 4, 0.1)), (x, y, z, c, i, j) => {
+    if (j === 1) return (c.front && Math.abs(x) <= 1) ? FGOLD : DFBROWN;
+    if (c.front && j > 1 && Math.abs((x - 0.9) + (y - 0.4) * 1.0) < 0.9) return FBROWN;
     return tunic;
-  });
+  }, undefined, BV);
   torso.position.set(0, 0.27, 0); body.add(torso);
 
-  // satchel on the right hip (front-right)
-  const bag = voxelPart([4, 4, 3], () => true, (x, y, z, c, i, j) => (j === 3 ? DFBROWN : (c.front && i === 1 && j === 1 ? FGOLD : FBROWN)));
-  bag.position.set(0.37, 0.12, 0.12); body.add(bag);
+  const bag = voxelPart([4, 4, 3], () => true, (x, y, z, c, i, j) => (j === 3 ? DFBROWN : (c.front && i === 1 && j === 1 ? FGOLD : FBROWN)), undefined, BV);
+  bag.position.set(0.42, 0.12, 0.15); body.add(bag);
 
-  // scarf ring + hanging cape
-  const scarf = voxelPart([9, 2, 7], (i, j, k) => { const x = (i - 4) / 4.4, z = (k - 3) / 3.4; return x * x + z * z <= 1; }, () => scarfC);
-  scarf.position.set(0, 0.55, 0); body.add(scarf);
-  const capeG = new THREE.Group(); capeG.position.set(0, 0.55, -0.27); body.add(capeG);
-  const cape = voxelPart([8, 8, 2], (i, j, k) => Math.abs(i - 3.5) <= 3.2 + (7 - j) * 0.08 - hash3(i, j, k) * (j < 2 ? 1.6 : 0.2), () => scarfC);
-  cape.position.set(0, -0.36, -0.03); capeG.add(cape);
+  const scarf = voxelPart([13, 3, 10], (i, j, k) => { const x = (i - 6) / 6.4, z = (k - 4.5) / 4.9; return x * x + z * z <= 1; }, () => scarfC, undefined, BV);
+  scarf.position.set(0, 0.52, 0); body.add(scarf);
+  const capeG = new THREE.Group(); capeG.position.set(0, 0.56, -0.29); body.add(capeG);
+  const cape = voxelPart([10, 10, 2], (i, j, k) => Math.abs(i - 4.5) <= 4.2 + (9 - j) * 0.06 - hash3(i, j, k) * (j < 3 ? 1.8 : 0.2), () => scarfC, undefined, BV);
+  cape.position.set(0, -0.37, -0.04); capeG.add(cape);
 
-  // head 13x11x11 + painted face
-  const head = new THREE.Group(); head.position.y = 1.07; body.add(head);
-  const hN = [13, 11, 11], hIn = superEll(6.4, 5.4, 5.4, 4, 0.1);
-  const hInside = (i, j, k) => i >= 0 && j >= 0 && k >= 0 && i < 13 && j < 11 && k < 11 && hIn(i, j, k, hN);
+  // head 19x16x15: wide rounded block, fluffy side tufts, big tall eyes, square cheeks, tiny nose
+  const head = new THREE.Group(); head.position.y = 1.03; body.add(head);
+  const hN = [23, 17, 15], hEll = superEll(9.5, 8.3, 7.3, 5, 0.1);
+  const hInside = inb(hN, (i, j, k, n) => {
+    if (hEll(i, j, k, n)) return true;
+    const x = i - 11, y = j - 8, ax = Math.abs(x);                                    // tufts: stepped fur that sticks out under the ears
+    return ax >= 8 && ax <= 11 && y <= -1 && y >= -6 && Math.abs(k - 7) <= 4 && (ax - 8) <= (y + 6) * 0.55 && hash3(i, j, k) > 0.25;
+  });
   const face = voxelPart(hN, hInside, (x, y, z, c) => {
     if (c.front) {
       const ax = Math.abs(x);
-      if ((ax === 3 || ax === 4) && y >= -1 && y <= 1) return (y === 1 && x === (x < 0 ? -3 : 4)) ? 0xffffff : FBLACK;   // eyes + highlight
-      if ((ax === 5 || ax === 4) && (y === -3 || y === -2)) return FPINK;                                              // cheeks
-      if (y === -1 && ax <= 1 && ax !== 99 && Math.abs(x) <= 1) return FNOSE;                                           // nose, wide row
-      if (y === -2 && x === 0) return FNOSE;                                                                            // nose tip
+      if (ax >= 4 && ax <= 6 && y >= -2 && y <= 2) return (y >= 1 && x === (x < 0 ? -4 : 6)) ? 0xffffff : FBLACK;   // tall eyes + highlight upper right
+      if (ax >= 7 && ax <= 8 && y >= -5 && y <= -3) return FPINK;                                                    // cheeks
+      if (y === -3 && ax <= 1) return FNOSE;                                                                          // nose
+      if (y === -4 && x === 0) return FNOSE;
     }
     return FWHITE;
-  });
+  }, [11, 8, 7], HV);
   head.add(face);
   const ears = [];
   for (const s of [-1, 1]) {
-    const ear = new THREE.Group(); ear.position.set(s * 0.43, 0.46, -0.04); ear.rotation.z = -s * 0.2; head.add(ear);
-    const eIn = (i, j, k) => j >= 0 && k >= 0 && k < 3 && Math.abs(i - 2.5) <= 2.6 - j * 0.42;
-    const em = voxelPart([6, 6, 3], eIn, (x, y, z, c, i, j) => (c.front && j >= 1 && j <= 4 && Math.abs(i - 2.5) <= 2.1 - j * 0.42 ? FPINK : FWHITE), [2.5, 0, 1]);
-    em.position.set(0, 0.04, 0); ear.add(em); ears.push(ear);
+    const ear = new THREE.Group(); ear.position.set(s * 0.46, 0.43, -0.03); ear.rotation.z = -s * 0.3; head.add(ear);
+    const eN = [8, 10, 3];
+    const em = voxelPart(eN, inb(eN, (i, j) => Math.abs(i - 3.5) <= 3.8 - j * 0.4),
+      (x, y, z, c, i, j) => (c.front && j >= 1 && j <= 6 && Math.abs(i - 3.5) <= 2.7 - j * 0.38 ? FPINK : FWHITE), [3.5, 0, 1], HV);
+    ear.add(em); ears.push(ear);
   }
 
-  // arms: purple sleeve, white cuff and glove
+  // arms: short purple sleeve, white cuff and hand
   const arms = [];
   for (const s of [-1, 1]) {
-    const arm = new THREE.Group(); arm.position.set(s * 0.45, 0.46, 0.02); body.add(arm);
-    const am = voxelPart([3, 6, 3], (i, j, k) => !((i === 0 || i === 2) && (k === 0 || k === 2)) || j > 1, (x, y, z, c, i, j) => (j >= 4 ? tunic : FWHITE));
-    am.position.set(0, -0.2, 0); arm.add(am); arms.push(arm);
+    const arm = new THREE.Group(); arm.position.set(s * 0.44, 0.47, 0.02); body.add(arm);
+    const am = voxelPart([3, 7, 3], () => true, (x, y, z, c, i, j) => (j >= 5 ? tunic : FWHITE), undefined, BV);
+    am.position.set(0, -0.24, 0); arm.add(am); arms.push(arm);
   }
 
-  // legs
   const legs = [];
   for (const s of [-1, 1]) {
-    const leg = new THREE.Group(); leg.position.set(s * 0.19, 0.3, 0); g.add(leg);
-    const lm = voxelPart([3, 3, 4], () => true, (x, y, z, c, i, j) => (j === 0 ? DFBROWN : FWHITE), [1, 3, 1.5]);
-    lm.position.set(0, 0, 0.03); leg.add(lm); legs.push(leg);
+    const leg = new THREE.Group(); leg.position.set(s * 0.17, 0.3, 0); g.add(leg);
+    const lm = voxelPart([4, 4, 5], () => true, (x, y, z, c, i, j) => (j === 0 ? DFBROWN : FWHITE), [1.5, 3.5, 2], BV);
+    lm.position.set(0, 0.04, 0.05); leg.add(lm); legs.push(leg);
   }
 
-  // tail: voxel tube along a curve (grid index space), starts at the anchor
-  const curve = []; for (let sT = 0; sT <= 1.001; sT += 0.025) curve.push([2 + 1.6 * Math.sin(sT * 4), 0.5 + 7 * sT * sT, 10 - 9.5 * sT]);
+  // tail: voxel tube along a curve, curls up and back
+  const curve = []; for (let sT = 0; sT <= 1.001; sT += 0.02) curve.push([2 + 2 * Math.sin(sT * 4), 0.5 + 8.5 * sT * sT, 11 - 10.5 * sT]);
   const tail = new THREE.Group(); tail.position.set(0, 0.1, -0.2); body.add(tail);
-  const tm = voxelPart([7, 10, 11], (i, j, k) => curve.some(p => (p[0] - i) ** 2 + (p[1] - j) ** 2 + (p[2] - k) ** 2 < 2.4), () => FWHITE, [2, 0, 10]);
-  tail.add(tm);
+  tail.add(voxelPart([8, 11, 12], (i, j, k) => curve.some(p => (p[0] - i) ** 2 + (p[1] - j) ** 2 + (p[2] - k) ** 2 < 3.0), () => FWHITE, [2, 0, 11], BV));
 
   g.userData = { body, head, arms, legs, tail, capeG, ears, ph: Math.random() * 6 };
   return g;
