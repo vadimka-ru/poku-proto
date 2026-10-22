@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Poku light test</title>
+<style>html,body{margin:0;height:100%;background:#cfe3f7;overflow:hidden;touch-action:none}canvas{display:block;width:100%;height:100%}#msg{position:fixed;left:0;right:0;top:45%;text-align:center;font:16px sans-serif;color:#345}</style></head>
+<body><canvas id="canvas"></canvas><div id="msg">loading…</div>
+<script src="godot.js"></script>
+<script>
+const engine = new Engine({executable: 'godot', mainPack: 'index.pck', canvasResizePolicy: 2, args: []});
+engine.startGame({onProgress: (c, t) => { const m = document.getElementById('msg'); if (m) m.textContent = 'loading ' + (t ? Math.round(100 * c / t) + '%' : ''); }})
+  .then(() => document.getElementById('msg').remove())
+  .catch(e => { document.getElementById('msg').textContent = 'failed: ' + e; });
+</script></body></html>
